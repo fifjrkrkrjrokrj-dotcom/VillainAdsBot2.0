@@ -81,11 +81,19 @@ async def show_main_menu(event, user_id):
     start_image = global_settings.get("start_image")
     try:
         if start_image:
+            if hasattr(event, "edit"):
+                try:
+                    await event.delete()
+                except Exception:
+                    pass
             await event.respond(text, file=start_image, buttons=buttons)
         else:
-            await event.respond(text, buttons=buttons)
+            if hasattr(event, "edit"):
+                await event.edit(text, buttons=buttons)
+            else:
+                await event.respond(text, buttons=buttons)
     except Exception as e:
-        logger.error(f"Error rendering main menu with image: {e}. Falling back to text-only.")
+        logger.error(f"Error rendering main menu: {e}")
         await event.respond(text, buttons=buttons)
 
 def register_handlers(client):

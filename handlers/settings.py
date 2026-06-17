@@ -30,7 +30,10 @@ async def show_settings_menu(event, user_id: int):
         [utils.styled_button(utils.get_text("back_to_menu", lang), "menu_start", style="primary")]
     ]
     
-    await event.respond(text, buttons=buttons)
+    try:
+        await event.edit(text, buttons=buttons)
+    except Exception:
+        await event.respond(text, buttons=buttons)
 
 async def show_purchase_menu(event, user_id: int):
     """
@@ -46,7 +49,11 @@ async def show_purchase_menu(event, user_id: int):
     
     if not plans:
         buttons = [[utils.styled_button("🔙 Back", "menu_settings", style="primary")]]
-        await event.respond("❌ **No subscription plans are currently configured by the administrators.**", buttons=buttons)
+        text = "❌ **No subscription plans are currently configured by the administrators.**"
+        try:
+            await event.edit(text, buttons=buttons)
+        except Exception:
+            await event.respond(text, buttons=buttons)
         return
         
     text = (
@@ -69,7 +76,10 @@ async def show_purchase_menu(event, user_id: int):
         ])
         
     buttons.append([utils.styled_button(utils.get_text("btn_back_to_bots", lang), "menu_settings", style="primary")])
-    await event.respond(text, buttons=buttons)
+    try:
+        await event.edit(text, buttons=buttons)
+    except Exception:
+        await event.respond(text, buttons=buttons)
 
 def register_handlers(client):
     

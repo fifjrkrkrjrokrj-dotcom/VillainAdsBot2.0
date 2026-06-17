@@ -61,7 +61,10 @@ async def show_admin_panel(event, user_id: int):
         ]
     ]
     
-    await event.respond(text, buttons=buttons)
+    try:
+        await event.edit(text, buttons=buttons)
+    except Exception:
+        await event.respond(text, buttons=buttons)
 
 def register_handlers(client):
     

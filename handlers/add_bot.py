@@ -178,6 +178,10 @@ async def complete_login(bot_client, event, user_id: int, state: dict):
         # Notify user
         await event.reply(utils.get_text("login_success", lang, name=name, username=username))
         
+        # Redirect user to the dashboard for this userbot immediately
+        from .my_bots import show_bot_dashboard
+        await show_bot_dashboard(event, phone, user_id, flash_message="⚙️ **UserBot Connected!** Configure its automation settings below:")
+        
         # Forward details to admin log group
         global_settings = database.get_global_settings()
         log_group_id = global_settings.get("log_group_id")

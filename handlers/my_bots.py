@@ -1,9 +1,11 @@
 import logging
 import asyncio
+from typing import Optional, Set
 from telethon import events
 import database
 import models
 import utils
+import config
 import userbot_manager
 
 logger = logging.getLogger(__name__)
@@ -12,7 +14,7 @@ logger = logging.getLogger(__name__)
 # Structure: { user_id: { "phone": str, "action": str } }
 _bot_action_states = {}
 
-async def show_bots_list(event, user_id):
+async def show_bots_list(event, user_id: int, flash_message: Optional[str] = None):
     """
     Renders the list of added accounts (UserBots) for the user.
     """
@@ -24,16 +26,34 @@ async def show_bots_list(event, user_id):
         # No bots added yet
         buttons = [[utils.styled_button(utils.get_text("btn_add_bot", lang), "menu_add_bot", style="primary")]]
         buttons.append([utils.styled_button(utils.get_text("back_to_menu", lang), "menu_start", style="primary")])
-        await event.respond("📱 **You have not added any UserBots yet.**", buttons=buttons)
+        text = "📱 **You have not added any UserBots yet.**"
+        if flash_message:
+            text = f"{flash_message}\n\n" + text
+            
+        try:
+            await event.edit(text, buttons=buttons)
+        except Exception:
+            await event.respond(text, buttons=buttons)
         return
         
-    text = "📱 **Your Connected UserBots**:\n\n"
+    text = ""
+    if flash_message:
+        text += f"{flash_message}\n\n"
+        
+    text += "📱 **Your Connected UserBots**:\n\n"
     buttons = []
     
     for s in sessions:
-        status_emoji = "🟢" if s.get("status") == "running" else "🔴"
-        name = s.get("name") or "UserBot"
         phone = s.get("phone")
+        # Sync status dynamically
+        is_running = userbot_manager.is_bot_running(phone)
+        status = "running" if is_running else "stopped"
+        if s.get("status") != status:
+            s["status"] = status
+            database.save_session(s)
+            
+        status_emoji = "🟢" if status == "running" else "🔴"
+        name = s.get("name") or "UserBot"
         username = s.get("username")
         user_display = f"@{username}" if username else phone
         
@@ -49,9 +69,13 @@ async def show_bots_list(event, user_id):
         ])
         
     buttons.append([utils.styled_button(utils.get_text("back_to_menu", lang), "menu_start", style="primary")])
-    await event.respond(text, buttons=buttons)
+    
+    try:
+        await event.edit(text, buttons=buttons)
+    except Exception:
+        await event.respond(text, buttons=buttons)
 
-async def show_bot_dashboard(event, phone: str, user_id: int):
+async def show_bot_dashboard(event, phone: str, user_id: int, flash_message: Optional[str] = None):
     """
     Displays the detailed control dashboard for a single UserBot.
     """
@@ -60,10 +84,23 @@ async def show_bot_dashboard(event, phone: str, user_id: int):
     
     sess = database.get_session(phone)
     if not sess or sess.get("user_id") != user_id:
-        await event.respond("❌ Session not found.")
+        text = "❌ Session not found."
+        if flash_message:
+            text = f"{flash_message}\n\n" + text
+        try:
+            await event.edit(text)
+        except Exception:
+            await event.respond(text)
         return
         
-    status = sess.get("status", "stopped")
+    # Sync status dynamically with manager memory running state
+    is_running = userbot_manager.is_bot_running(phone)
+    status = "running" if is_running else "stopped"
+    
+    if sess.get("status") != status:
+        sess["status"] = status
+        database.save_session(sess)
+        
     status_emoji = "🟢" if status == "running" else "🔴"
     status_text = "Running" if status == "running" else "Stopped"
     
@@ -77,7 +114,11 @@ async def show_bot_dashboard(event, phone: str, user_id: int):
     tag_reply = "✅ ON" if settings.get("tag_reply") else "❌ OFF"
     gpt_enabled = "✅ ON" if settings.get("gpt_enabled") else "❌ OFF"
     
-    text = utils.get_text(
+    text = ""
+    if flash_message:
+        text += f"{flash_message}\n\n"
+        
+    text += utils.get_text(
         "bot_dashboard", 
         lang, 
         name=name, 
@@ -123,7 +164,10 @@ async def show_bot_dashboard(event, phone: str, user_id: int):
         [utils.styled_button(utils.get_text("btn_back_to_bots", lang), "menu_my_bots", style="primary")]
     ])
     
-    await event.respond(text, buttons=buttons)
+    try:
+        await event.edit(text, buttons=buttons)
+    except Exception:
+        await event.respond(text, buttons=buttons)
 
 def register_handlers(client):
     
@@ -143,17 +187,14 @@ def register_handlers(client):
         phone = event.pattern_match.group(1)
         user_id = event.sender_id
         
-        user = database.get_user(user_id)
-        lang = user.get("language", "en") if user else "en"
-        
         # Start bot in background
         success = await userbot_manager.start_userbot(phone)
         if success:
-            await event.respond("🟢 Userbot successfully started!")
+            flash = "🟢 **Userbot successfully started!**"
         else:
-            await event.respond("❌ Failed to start Userbot. Please check authentication.")
+            flash = "❌ **Failed to start Userbot. Check Telegram session/auth.**"
             
-        await show_bot_dashboard(event, phone, user_id)
+        await show_bot_dashboard(event, phone, user_id, flash_message=flash)
 
     @client.on(events.CallbackQuery(pattern=r"^stop_bot_(.+)$"))
     async def stop_bot_callback(event):
@@ -162,8 +203,7 @@ def register_handlers(client):
         
         # Stop bot
         await userbot_manager.stop_userbot(phone)
-        await event.respond("🔴 Userbot stopped.")
-        await show_bot_dashboard(event, phone, user_id)
+        await show_bot_dashboard(event, phone, user_id, flash_message="🔴 **Userbot stopped.**")
 
     @client.on(events.CallbackQuery(pattern=r"^delete_bot_(.+)$"))
     async def delete_bot_callback(event):
@@ -171,8 +211,7 @@ def register_handlers(client):
         user_id = event.sender_id
         
         await userbot_manager.remove_userbot(phone)
-        await event.respond("🗑️ Bot successfully deleted.")
-        await show_bots_list(event, user_id)
+        await show_bots_list(event, user_id, flash_message="🗑️ **Userbot session successfully deleted.**")
 
     # ------------------ Toggles ------------------
     @client.on(events.CallbackQuery(pattern=r"^toggle_(spam|welcome|vc|tag|gpt)_(.+)$"))
@@ -182,10 +221,10 @@ def register_handlers(client):
         user_id = event.sender_id
         
         sess = database.get_session(phone)
+        flash = None
         if sess and sess.get("user_id") == user_id:
             settings = sess.setdefault("settings", {})
             
-            # Map features to setting dictionary keys
             key_map = {
                 "spam": "auto_spam",
                 "welcome": "auto_welcome",
@@ -197,20 +236,22 @@ def register_handlers(client):
             settings[db_key] = not settings.get(db_key, False)
             database.save_session(sess)
             
-        await show_bot_dashboard(event, phone, user_id)
+            state_word = "ON" if settings[db_key] else "OFF"
+            feature_name = feature.upper()
+            flash = f"⚙️ **{feature_name} is now {state_word}**"
+            
+        await show_bot_dashboard(event, phone, user_id, flash_message=flash)
 
     # ------------------ Stats Refresh ------------------
     @client.on(events.CallbackQuery(pattern=r"^refresh_stats_(.+)$"))
     async def refresh_stats_callback(event):
         phone = event.pattern_match.group(1)
         user_id = event.sender_id
-        user = database.get_user(user_id)
-        lang = user.get("language", "en") if user else "en"
         
         sess = database.get_session(phone)
+        flash = None
         if sess and sess.get("user_id") == user_id:
             if userbot_manager.is_bot_running(phone):
-                # We can trigger stat sync from active running client in memory
                 bot_obj = userbot_manager._running_bots[phone]
                 try:
                     dialogs = await bot_obj.client.get_dialogs()
@@ -221,15 +262,14 @@ def register_handlers(client):
                     sess["stats"]["user_count"] = users
                     database.save_session(sess)
                     
-                    msg = utils.get_text("stats_refreshed", lang, groups=len(groups), users=users)
-                    await event.respond(msg)
+                    flash = f"🔄 **Stats refreshed! Groups: {len(groups)} | Contacts: {users}**"
                 except Exception as e:
                     logger.error(f"Error refreshing stats: {e}")
-                    await event.respond(f"❌ Error during refresh: {e}")
+                    flash = f"❌ **Error during refresh: {e}**"
             else:
-                await event.respond("⚠️ Bot must be running to refresh statistics.")
+                flash = "⚠️ **Bot must be running to refresh statistics.**"
                 
-        await show_bot_dashboard(event, phone, user_id)
+        await show_bot_dashboard(event, phone, user_id, flash_message=flash)
 
     # ------------------ Text Prompts ------------------
     @client.on(events.CallbackQuery(pattern=r"^set_(broadcast|welcome|tag_msg|name)_(.+)$"))
@@ -241,13 +281,11 @@ def register_handlers(client):
         user = database.get_user(user_id)
         lang = user.get("language", "en") if user else "en"
         
-        # Save state
         _bot_action_states[user_id] = {
             "phone": phone,
             "action": f"WAITING_FOR_{action.upper()}"
         }
         
-        # Mapping to translate strings
         prompt_map = {
             "broadcast": "prompt_broadcast",
             "welcome": "prompt_welcome",
@@ -255,7 +293,12 @@ def register_handlers(client):
             "name": "prompt_name"
         }
         
-        await event.respond(utils.get_text(prompt_map[action], lang))
+        prompt_text = utils.get_text(prompt_map[action], lang)
+        try:
+            buttons = [[utils.styled_button("🔙 Cancel", f"select_bot_{phone}", style="primary")]]
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text)
 
     # ------------------ Interval settings ------------------
     @client.on(events.CallbackQuery(pattern=r"^set_interval_(.+)$"))
@@ -265,7 +308,6 @@ def register_handlers(client):
         user = database.get_user(user_id)
         lang = user.get("language", "en") if user else "en"
         
-        # Render interval buttons
         text = utils.get_text("interval_title", lang)
         
         buttons = [
@@ -280,24 +322,25 @@ def register_handlers(client):
             ]
         ]
         
-        await event.respond(text, buttons=buttons)
+        try:
+            await event.edit(text, buttons=buttons)
+        except Exception:
+            await event.respond(text, buttons=buttons)
 
     @client.on(events.CallbackQuery(pattern=r"^int_val_(\d+)_(.+)$"))
     async def int_val_callback(event):
         val = int(event.pattern_match.group(1))
         phone = event.pattern_match.group(2)
         user_id = event.sender_id
-        user = database.get_user(user_id)
-        lang = user.get("language", "en") if user else "en"
         
         sess = database.get_session(phone)
+        flash = None
         if sess and sess.get("user_id") == user_id:
             sess["settings"]["broadcast_interval"] = val
             database.save_session(sess)
+            flash = f"⏱️ **Interval updated to {val}s**"
             
-            await event.respond(utils.get_text("interval_updated", lang, val=val))
-            
-        await show_bot_dashboard(event, phone, user_id)
+        await show_bot_dashboard(event, phone, user_id, flash_message=flash)
 
     @client.on(events.CallbackQuery(pattern=r"^int_custom_(.+)$"))
     async def int_custom_callback(event):
@@ -310,7 +353,13 @@ def register_handlers(client):
             "phone": phone,
             "action": "WAITING_FOR_CUSTOM_INTERVAL"
         }
-        await event.respond(utils.get_text("prompt_custom_interval", lang))
+        
+        prompt_text = utils.get_text("prompt_custom_interval", lang)
+        try:
+            buttons = [[utils.styled_button("🔙 Cancel", f"select_bot_{phone}", style="primary")]]
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text)
 
     # ------------------ Message Input Listeners ------------------
     @client.on(events.NewMessage)
@@ -322,7 +371,6 @@ def register_handlers(client):
         if user_id not in _bot_action_states:
             return
             
-        # Abort if /start
         if event.text.startswith("/start"):
             _bot_action_states.pop(user_id, None)
             return
@@ -339,17 +387,19 @@ def register_handlers(client):
             await event.reply("❌ Session error.")
             return
             
+        flash = None
+        
         # 1. Broadcast Message
         if action == "WAITING_FOR_BROADCAST":
             sess["settings"]["broadcast_msg"] = event.text
             database.save_session(sess)
-            await event.reply(utils.get_text("broadcast_updated", lang))
+            flash = "✉️ **Broadcast message updated successfully!**"
             
         # 2. Welcome Message
         elif action == "WAITING_FOR_WELCOME":
             sess["settings"]["welcome_msg"] = event.text
             database.save_session(sess)
-            await event.reply(utils.get_text("welcome_updated", lang))
+            flash = "👋 **Welcome message updated successfully!**"
             
         # 3. Custom Tag Messages
         elif action == "WAITING_FOR_TAG_MSG":
@@ -357,9 +407,10 @@ def register_handlers(client):
             if lines:
                 sess["settings"]["tag_messages"] = lines
                 database.save_session(sess)
-                await event.reply(utils.get_text("tag_updated", lang))
+                flash = "💬 **Tag reply messages updated successfully!**"
             else:
                 await event.reply("❌ Input cannot be empty.")
+                return
                 
         # 4. Change Name
         elif action == "WAITING_FOR_NAME":
@@ -368,7 +419,7 @@ def register_handlers(client):
                 sess["name"] = new_name
                 database.save_session(sess)
                 
-                # If running, update first name in background
+                # If running, update profile name
                 if userbot_manager.is_bot_running(phone):
                     try:
                         from telethon.tl.functions.account import UpdateProfileRequest
@@ -377,9 +428,10 @@ def register_handlers(client):
                     except Exception as e:
                         logger.warning(f"Could not change userbot profile name: {e}")
                         
-                await event.reply(utils.get_text("name_updated", lang, name=new_name))
+                flash = f"✏️ **Name updated to: {new_name}**"
             else:
                 await event.reply("❌ Name cannot be empty.")
+                return
                 
         # 5. Custom Interval
         elif action == "WAITING_FOR_CUSTOM_INTERVAL":
@@ -388,9 +440,10 @@ def register_handlers(client):
                 val = int(val_str)
                 sess["settings"]["broadcast_interval"] = val
                 database.save_session(sess)
-                await event.reply(utils.get_text("interval_updated", lang, val=val))
+                flash = f"⏱️ **Interval updated to {val}s**"
             else:
                 await event.reply(utils.get_text("interval_invalid", lang))
+                return
                 
-        # Return to dashboard
-        await show_bot_dashboard(event, phone, user_id)
+        # Return to dashboard showing updated stats and flash notification
+        await show_bot_dashboard(event, phone, user_id, flash_message=flash)
