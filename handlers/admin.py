@@ -69,6 +69,15 @@ async def show_admin_panel(event, user_id: int):
 def register_handlers(client):
     
     # ------------------ Navigation ------------------
+    @client.on(events.NewMessage(pattern="/admin"))
+    async def admin_cmd(event):
+        if not event.is_private:
+            return
+        import utils
+        if await utils.guard(event, client):
+            return
+        await show_admin_panel(event, event.sender_id)
+
     @client.on(events.CallbackQuery(pattern="^menu_admin$"))
     async def admin_menu_callback(event):
         await show_admin_panel(event, event.sender_id)
