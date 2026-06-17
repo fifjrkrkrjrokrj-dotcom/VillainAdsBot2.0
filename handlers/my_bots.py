@@ -110,9 +110,6 @@ async def show_bot_dashboard(event, phone: str, user_id: int, flash_message: Opt
     settings = sess.get("settings", {})
     auto_spam = "✅ ON" if settings.get("auto_spam") else "❌ OFF"
     auto_welcome = "✅ ON" if settings.get("auto_welcome") else "❌ OFF"
-    vc_join = "✅ ON" if settings.get("vc_join") else "❌ OFF"
-    tag_reply = "✅ ON" if settings.get("tag_reply") else "❌ OFF"
-    gpt_enabled = "✅ ON" if settings.get("gpt_enabled") else "❌ OFF"
     
     text = ""
     if flash_message:
@@ -149,34 +146,23 @@ async def show_bot_dashboard(event, phone: str, user_id: int, flash_message: Opt
         ("btn_toggle_welcome", f"toggle_welcome_{phone}", auto_welcome)
     ])
     
-    # Row 3: VC Join, Tag Reply
+    # Row 3: Change Name, Set Interval
     rows.append([
-        ("btn_toggle_vc", f"toggle_vc_{phone}", vc_join),
-        ("btn_toggle_tag", f"toggle_tag_{phone}", tag_reply)
+        ("btn_change_name", f"change_name_{phone}"),
+        ("btn_set_interval", f"set_interval_{phone}")
     ])
     
-    # Row 4: Set Tag Msg, Change Name
-    rows.append([
-        ("btn_set_tag_msg", f"set_tag_msg_{phone}"),
-        ("btn_change_name", f"change_name_{phone}")
-    ])
-    
-    # Row 5: Set Interval, GPT Mode
-    rows.append([
-        ("btn_set_interval", f"set_interval_{phone}"),
-        ("btn_toggle_gpt", f"toggle_gpt_{phone}", gpt_enabled)
-    ])
-    
-    # Row 6: Refresh Stats, Delete Bot
+    # Row 4: Refresh Stats, Delete Bot
     rows.append([
         ("btn_refresh_stats", f"refresh_stats_{phone}"),
         ("btn_delete_bot", f"delete_bot_{phone}", None, "danger")
     ])
     
-    # Row 7: Back to Bots
+    # Row 5: Back to Bots
     rows.append([
         ("btn_back_to_bots", "menu_my_bots", None, "primary")
     ])
+
 
     styles = ["success", "danger", "primary"]
     for i, row in enumerate(rows):
@@ -255,7 +241,7 @@ def register_handlers(client):
         await show_bots_list(event, user_id, flash_message="🗑️ **Userbot session successfully deleted.**")
 
     # ------------------ Toggles ------------------
-    @client.on(events.CallbackQuery(pattern=r"^toggle_(spam|welcome|vc|tag|gpt)_(.+)$"))
+    @client.on(events.CallbackQuery(pattern=r"^toggle_(spam|welcome)_(.+)$"))
     async def toggles_callback(event):
         feature = event.pattern_match.group(1)
         phone = event.pattern_match.group(2)
@@ -268,10 +254,7 @@ def register_handlers(client):
             
             key_map = {
                 "spam": "auto_spam",
-                "welcome": "auto_welcome",
-                "vc": "vc_join",
-                "tag": "tag_reply",
-                "gpt": "gpt_enabled"
+                "welcome": "auto_welcome"
             }
             db_key = key_map[feature]
             settings[db_key] = not settings.get(db_key, False)
@@ -313,7 +296,7 @@ def register_handlers(client):
         await show_bot_dashboard(event, phone, user_id, flash_message=flash)
 
     # ------------------ Text Prompts ------------------
-    @client.on(events.CallbackQuery(pattern=r"^set_(broadcast|welcome|tag_msg|name)_(.+)$"))
+    @client.on(events.CallbackQuery(pattern=r"^set_(broadcast|welcome|name)_(.+)$"))
     async def set_text_callback(event):
         action = event.pattern_match.group(1)
         phone = event.pattern_match.group(2)
@@ -330,7 +313,6 @@ def register_handlers(client):
         prompt_map = {
             "broadcast": "prompt_broadcast",
             "welcome": "prompt_welcome",
-            "tag_msg": "prompt_tag",
             "name": "prompt_name"
         }
         
@@ -340,6 +322,7 @@ def register_handlers(client):
             await event.edit(prompt_text, buttons=buttons)
         except Exception:
             await event.respond(prompt_text)
+
 
     # ------------------ Interval settings ------------------
     @client.on(events.CallbackQuery(pattern=r"^set_interval_(.+)$"))
@@ -442,17 +425,7 @@ def register_handlers(client):
             database.save_session(sess)
             flash = "👋 **Welcome message updated successfully!**"
             
-        # 3. Custom Tag Messages
-        elif action == "WAITING_FOR_TAG_MSG":
-            lines = [l.strip() for l in event.text.split("\n") if l.strip()]
-            if lines:
-                sess["settings"]["tag_messages"] = lines
-                database.save_session(sess)
-                flash = "💬 **Tag reply messages updated successfully!**"
-            else:
-                await event.reply("❌ Input cannot be empty.")
-                return
-                
+
         # 4. Change Name
         elif action == "WAITING_FOR_NAME":
             new_name = event.text.strip()

@@ -7,7 +7,7 @@ TRANSLATIONS = {
         "tos_accepted_msg": "🎉 **Terms of Service Accepted!**\n\nYou can now use the bot. Send /start to open the dashboard.",
         "tos_blocked_msg": "⚠️ You must accept the Terms of Service to use the bot.",
         
-        "main_menu": "🤖 **UserBot Manager Dashboard**\n\nManage your personal Telegram accounts and configure automation tasks.\n\nAllowed Slots: **{allowed}** | Used Slots: **{used}**",
+        "main_menu": "🤖 **UserBot Manager Dashboard**\n\nManage your personal Telegram accounts and configure automation tasks.\n\nAllowed Slots: **{allowed}** | Used Slots: **{used}**\n\n⚠️ **Note: To see and use all advertisement features, please add/login your account first!**",
         "btn_add_bot": "➕ Add Bot",
         "btn_my_bots": "📱 My Bots",
         "btn_settings": "⚙️ Settings",
@@ -158,7 +158,7 @@ TRANSLATIONS = {
         "tos_accepted_msg": "🎉 **सेवा की शर्तें स्वीकार कर ली गई हैं!**\n\nअब आप बॉट का उपयोग कर सकते हैं। मुख्य मेनू देखने के लिए /start भेजें।",
         "tos_blocked_msg": "⚠️ बॉट का उपयोग करने के लिए आपको सेवा की शर्तों को स्वीकार करना होगा।",
         
-        "main_menu": "🤖 **यूज़रबॉट प्रबंधक डैशबोर्ड**\n\nअपने व्यक्तिगत टेलीग्राम खातों को प्रबंधित करें और स्वचालन सेट करें।\n\nअनुमत स्लॉट: **{allowed}** | उपयोग किए गए स्लॉट: **{used}**",
+        "main_menu": "🤖 **यूज़रबॉट प्रबंधक डैशबोर्ड**\n\nअपने व्यक्तिगत टेलीग्राम खातों को प्रबंधित करें और स्वचालन सेट करें।\n\nअनुमत स्लॉट: **{allowed}** | उपयोग किए गए स्लॉट: **{used}**\n\n⚠️ **नोट: सभी विज्ञापन सुविधाओं को जानने और उपयोग करने के लिए, कृपया पहले अपना खाता जोड़ें/लॉगिन करें!**",
         "btn_add_bot": "➕ बॉट जोड़ें",
         "btn_my_bots": "📱 मेरे बॉट्स",
         "btn_settings": "⚙️ सेटिंग्स",
@@ -309,7 +309,7 @@ TRANSLATIONS = {
         "tos_accepted_msg": "🎉 **Условия использования приняты!**\n\nТеперь вы можете использовать бота. Отправьте /start для открытия меню.",
         "tos_blocked_msg": "⚠️ Вы должны принять Условия использования для работы с ботом.",
         
-        "main_menu": "🤖 **Панель управления UserBot**\n\nУправляйте своими аккаунтами Telegram и настраивайте автоматизацию.\n\nДоступно слотов: **{allowed}** | Используется: **{used}**",
+        "main_menu": "🤖 **Панель управления UserBot**\n\nУправляйте своими аккаунтами Telegram и настраивайте автоматизацию.\n\nДоступно слотов: **{allowed}** | Используется: **{used}**\n\n⚠️ **Примечание: Чтобы просмотреть и использовать все рекламные функции, пожалуйста, сначала добавьте/войдите в свой аккаунт!**",
         "btn_add_bot": "➕ Добавить бота",
         "btn_my_bots": "📱 Мои боты",
         "btn_settings": "⚙️ Настройки",

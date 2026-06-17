@@ -295,50 +295,10 @@ class UserBot:
                                 database.save_session(sess_data)
                             except Exception as e:
                                 logger.warning(f"Could not send welcome message to {sender.id}: {e}")
-                
-                # GPT replies
-                if settings.get("gpt_enabled"):
-                    global_settings = database.get_global_settings()
-                    api_key = global_settings.get("gpt_api_key")
-                    if api_key:
-                        try:
-                            reply = await call_gpt_api(api_key, event.text)
-                            await event.reply(reply)
-                        except Exception as e:
-                            logger.warning(f"Could not reply with GPT to {sender.id}: {e}")
-            
             # 2. Group automations
             elif event.is_group:
-                # VC Auto-Join
-                if settings.get("vc_join") and event.chat_id not in self.joined_vcs:
-                    success = await join_vc(self.client, event.chat_id)
-                    if success:
-                        self.joined_vcs.add(event.chat_id)
-                
-                # Tag Reply
-                if settings.get("tag_reply"):
-                    is_tagged = False
-                    if event.mentioned:
-                        is_tagged = True
-                    else:
-                        reply = await event.get_reply_message()
-                        if reply:
-                            me = await self.client.get_me()
-                            if reply.sender_id == me.id:
-                                is_tagged = True
-                                
-                    if is_tagged:
-                        now = time.time()
-                        last_reply_time = self.tag_cooldown.get(event.chat_id, 0)
-                        if now - last_reply_time >= 5.0: # 5s cooldown
-                            self.tag_cooldown[event.chat_id] = now
-                            lines = settings.get("tag_messages", [])
-                            if lines:
-                                reply_text = random.choice(lines)
-                                try:
-                                    await event.reply(reply_text)
-                                except Exception as e:
-                                    logger.warning(f"Failed to reply to tag in {event.chat_id}: {e}")
+                pass
+
 
     async def broadcast_loop(self):
         """
