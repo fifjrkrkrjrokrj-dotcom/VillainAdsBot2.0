@@ -299,12 +299,29 @@ def style_keyboard(buttons):
                 elif any(x in data_str for x in ["start_bot", "approve_payment", "accept_tos"]):
                     style = "success"
                 
-                # Assign the style
+                # Assign the style using KeyboardButtonStyle if supported by Telethon
                 try:
-                    btn.style = style
-                except AttributeError:
-                    setattr(btn, "style", style)
+                    from telethon.tl.types import KeyboardButtonStyle
+                    # Preserve existing icon if present
+                    icon = None
+                    if hasattr(btn, "style") and btn.style and hasattr(btn.style, "icon"):
+                        icon = btn.style.icon
                     
+                    if style == "primary":
+                        btn.style = KeyboardButtonStyle(bg_primary=True, icon=icon)
+                    elif style == "danger":
+                        btn.style = KeyboardButtonStyle(bg_danger=True, icon=icon)
+                    elif style == "success":
+                        btn.style = KeyboardButtonStyle(bg_success=True, icon=icon)
+                    else:
+                        btn.style = None
+                except (ImportError, AttributeError, TypeError):
+                    # Backward compatibility for older Telethon versions where style is a custom attribute string
+                    try:
+                        btn.style = style
+                    except AttributeError:
+                        setattr(btn, "style", style)
+                        
     if not is_2d:
         if not isinstance(buttons, (list, tuple)):
             return grid[0][0]
