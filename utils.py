@@ -305,30 +305,14 @@ def style_keyboard(buttons):
         
     # Style pattern loop: danger -> primary -> success
     styles = ["danger", "primary", "success"]
-    btn_index = 0
     
-    for row in grid:
+    for row_idx, row in enumerate(grid):
+        # Determine the color style for this row based on its row index
+        style = styles[row_idx % len(styles)]
+        
         for btn in row:
             # Check if it is a button (has text attribute)
             if hasattr(btn, "text"):
-                # Apply repeating loop style
-                style = styles[btn_index % len(styles)]
-                btn_index += 1
-                
-                # Check for semantic overrides based on data or url
-                data_str = ""
-                if hasattr(btn, "data") and btn.data:
-                    data_str = btn.data.decode("utf-8") if isinstance(btn.data, bytes) else str(btn.data)
-                elif hasattr(btn, "url") and btn.url:
-                    data_str = btn.url
-                
-                # Destructive/dangerous actions: RED (danger)
-                if any(x in data_str for x in ["stop_bot", "delete_bot", "reject_payment", "cancel_login", "cancel_admin"]):
-                    style = "danger"
-                # Constructive/success actions: GREEN (success)
-                elif any(x in data_str for x in ["start_bot", "approve_payment", "accept_tos"]):
-                    style = "success"
-                
                 # Assign the style using KeyboardButtonStyle if supported by Telethon
                 try:
                     from telethon.tl.types import KeyboardButtonStyle

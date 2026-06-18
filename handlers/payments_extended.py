@@ -428,7 +428,30 @@ def register_handlers(client):
         
         buttons = [[utils.styled_button("❌ Cancel", "menu_settings", style="danger")]]
         if qr_url:
-            await event.respond(text, file=qr_url, buttons=buttons)
+            import urllib.request
+            import tempfile
+            import os
+            try:
+                # Download QR code image from the API
+                req = urllib.request.Request(qr_url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req) as response:
+                    qr_bytes = response.read()
+                
+                # Write to temp file with .png extension to force photo upload
+                fd, temp_file_path = tempfile.mkstemp(suffix=".png")
+                try:
+                    with os.fdopen(fd, 'wb') as tmp:
+                        tmp.write(qr_bytes)
+                    await event.respond(text, file=temp_file_path, buttons=buttons)
+                finally:
+                    try:
+                        os.remove(temp_file_path)
+                    except Exception:
+                        pass
+            except Exception as e:
+                logger.error(f"Failed to fetch or send QR code: {e}")
+                # Fallback to sending URL directly if download fails
+                await event.respond(text, file=qr_url, buttons=buttons)
         else:
             await event.respond(text, buttons=buttons)
         try:

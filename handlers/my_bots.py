@@ -47,8 +47,8 @@ async def show_mock_dashboard(event, user_id: int, flash_message: Optional[str] 
             utils.styled_button(utils.get_text("btn_clone_profile", lang), "no_login_clone", style="primary")
         ],
         [
-            utils.styled_button(utils.get_text("btn_help", lang), "no_login_help", style="primary"),
-            utils.styled_button(utils.get_text("btn_how_to_use", lang), "no_login_how_to_use", style="primary")
+            utils.styled_button(utils.get_text("btn_help", lang), "help_bot_no_login", style="primary"),
+            utils.styled_button(utils.get_text("btn_how_to_use", lang), "how_to_use_no_login", style="primary")
         ],
         [
             utils.styled_button(utils.get_text("btn_change_name", lang), "no_login_name", style="primary"),
@@ -292,6 +292,36 @@ def register_handlers(client):
         lang = user.get("language", "en") if user else "en"
         text = utils.get_text("how_to_use_text", lang)
         buttons = [[utils.styled_button("🔙 Back", f"select_bot_{phone}", style="primary")]]
+        try:
+            await event.edit(text, buttons=buttons)
+        except Exception:
+            await event.respond(text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern="^help_bot_no_login$"))
+    async def help_bot_no_login_callback(event):
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        text = utils.get_text("help_dashboard_text", lang)
+        buttons = [[utils.styled_button("🔙 Back", "menu_my_bots", style="primary")]]
+        
+        global_settings = database.get_global_settings()
+        help_image = global_settings.get("help_image")
+        try:
+            if help_image:
+                await event.respond(text, file=help_image, buttons=buttons)
+            else:
+                await event.edit(text, buttons=buttons)
+        except Exception:
+            await event.respond(text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern="^how_to_use_no_login$"))
+    async def how_to_use_no_login_callback(event):
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        text = utils.get_text("how_to_use_text", lang)
+        buttons = [[utils.styled_button("🔙 Back", "menu_my_bots", style="primary")]]
         try:
             await event.edit(text, buttons=buttons)
         except Exception:
