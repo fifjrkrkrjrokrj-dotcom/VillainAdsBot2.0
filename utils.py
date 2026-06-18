@@ -254,3 +254,85 @@ def set_pattern_match(self, value):
     self.__dict__["pattern_match"] = value
 
 events.CallbackQuery.Event.pattern_match = property(get_pattern_match, set_pattern_match)
+
+
+# ─── BUTTON STYLING MONKEYPATCH ──────────────────────────────────────────
+# Intercepts all inline keyboards sent by the bot (via send_message, edit_message, or send_file)
+# and automatically styles inline buttons in a repeating pattern (danger -> primary -> success).
+# Destructive buttons (stop, delete, cancel, reject) remain danger (red), and
+# constructive buttons (start, approve, accept) remain success (green).
+
+def style_keyboard(buttons):
+    if not buttons:
+        return buttons
+        
+    # Standardize buttons list structure (Telethon accepts single button, 1D row, or 2D grid)
+    is_2d = True
+    if not isinstance(buttons, (list, tuple)):
+        grid = [[buttons]]
+        is_2d = False
+    elif len(buttons) > 0 and not isinstance(buttons[0], (list, tuple)):
+        grid = [list(buttons)]
+        is_2d = False
+    else:
+        grid = [list(row) for row in buttons]
+        
+    # Style pattern loop: danger -> primary -> success
+    styles = ["danger", "primary", "success"]
+    btn_index = 0
+    
+    for row in grid:
+        for btn in row:
+            # Check if it is an inline callback button (has data/callback payload and no url)
+            if hasattr(btn, "data") and btn.data and not getattr(btn, "url", None):
+                # Apply repeating loop style
+                style = styles[btn_index % len(styles)]
+                btn_index += 1
+                
+                # Check for semantic overrides
+                data_str = btn.data.decode("utf-8") if isinstance(btn.data, bytes) else str(btn.data)
+                
+                # Destructive/dangerous actions: RED (danger)
+                if any(x in data_str for x in ["stop_bot", "delete_bot", "reject_payment", "cancel_login", "cancel_admin"]):
+                    style = "danger"
+                # Constructive/success actions: GREEN (success)
+                elif any(x in data_str for x in ["start_bot", "approve_payment", "accept_tos"]):
+                    style = "success"
+                
+                # Assign the style
+                try:
+                    btn.style = style
+                except AttributeError:
+                    setattr(btn, "style", style)
+                    
+    if not is_2d:
+        if not isinstance(buttons, (list, tuple)):
+            return grid[0][0]
+        else:
+            return grid[0]
+    return grid
+
+from telethon import TelegramClient
+
+orig_send_message = TelegramClient.send_message
+orig_edit_message = TelegramClient.edit_message
+orig_send_file = TelegramClient.send_file
+
+async def patched_send_message(self, entity, message=None, *args, **kwargs):
+    if "buttons" in kwargs:
+        kwargs["buttons"] = style_keyboard(kwargs["buttons"])
+    return await orig_send_message(self, entity, message, *args, **kwargs)
+
+async def patched_edit_message(self, entity, message=None, *args, **kwargs):
+    if "buttons" in kwargs:
+        kwargs["buttons"] = style_keyboard(kwargs["buttons"])
+    return await orig_edit_message(self, entity, message, *args, **kwargs)
+
+async def patched_send_file(self, entity, file, *args, **kwargs):
+    if "buttons" in kwargs:
+        kwargs["buttons"] = style_keyboard(kwargs["buttons"])
+    return await orig_send_file(self, entity, file, *args, **kwargs)
+
+TelegramClient.send_message = patched_send_message
+TelegramClient.edit_message = patched_edit_message
+TelegramClient.send_file = patched_send_file
