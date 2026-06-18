@@ -407,7 +407,9 @@ def register_handlers(client):
             upi_id = global_settings.get('upi_id', 'merchant@upi')
             address_text = f"🏦 UPI ID: `{upi_id}`"
             import urllib.parse
-            upi_uri = f"upi://pay?pa={upi_id}&pn=VillainUserBot&am={cost_inr:.2f}&cu=INR&tn={payment_id}"
+            import config
+            pn_encoded = urllib.parse.quote(config.BOT_NAME)
+            upi_uri = f"upi://pay?pa={upi_id}&pn={pn_encoded}&am={cost_inr:.2f}&cu=INR&tn={payment_id}"
             qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={urllib.parse.quote(upi_uri)}"
         elif method == "usdt":
             address_text = f"🪙 USDT (BEP20) Address:\n`{global_settings.get('usdt_bep20_address', '0x000')}`"

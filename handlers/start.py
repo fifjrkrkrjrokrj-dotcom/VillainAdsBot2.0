@@ -123,7 +123,7 @@ def register_handlers(client):
                 me = await client.get_me()
                 bot_username = me.username
                 text = (
-                    "📱 **Villain UserBot Manager**\n"
+                    f"📱 **{config.BOT_NAME} Manager**\n"
                     "━━━━━━━━━━━━━━━━━━━━\n"
                     "Configure your own automated userbots, group broadcasts, auto-welcome, and AI automations!\n\n"
                     "⚠️ **Note**: Settings can only be configured in direct messages (DM)."

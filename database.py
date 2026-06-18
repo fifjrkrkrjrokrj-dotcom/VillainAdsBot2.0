@@ -28,7 +28,7 @@ def db_init():
         try:
             _db = _mongo_client.get_database()
         except Exception:
-            _db = _mongo_client.get_database("villain_bot")
+            _db = _mongo_client.get_database(config.DEFAULT_DB_NAME)
         logger.info("Successfully connected to MongoDB.")
         
         # Initialize default settings if not exists
