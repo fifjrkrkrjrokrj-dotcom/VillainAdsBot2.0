@@ -85,27 +85,40 @@ async def join_vc(client: TelegramClient, peer_id: int) -> bool:
     return False
 
 
-async def force_join_channels(client: TelegramClient, channels: list):
+async def join_channel_single(client: TelegramClient, ch: str) -> bool:
     """
-    Forcibly joins the userbot to a list of channels or invite links.
+    Attempts to join a single channel or group by invite link or username.
+    Returns True if successfully joined or already in it, False otherwise.
     """
     from telethon.tl.functions.channels import JoinChannelRequest
     from telethon.tl.functions.messages import ImportChatInviteRequest
     
+    ch = ch.strip()
+    if not ch:
+        return False
+    try:
+        if "t.me/+" in ch or "t.me/joinchat/" in ch:
+            hash_val = ch.split('/')[-1].replace('+', '')
+            await client(ImportChatInviteRequest(hash_val))
+        else:
+            username = ch.split('/')[-1]
+            await client(JoinChannelRequest(username))
+        logger.info(f"Successfully joined channel/group: {ch}")
+        return True
+    except Exception as e:
+        err_msg = str(e).lower()
+        if "already" in err_msg or "already participant" in err_msg or "user_already_participant" in err_msg:
+            logger.debug(f"Already participant of: {ch}")
+            return True
+        logger.warning(f"Failed to join channel {ch}: {e}")
+        return False
+
+async def force_join_channels(client: TelegramClient, channels: list):
+    """
+    Forcibly joins the userbot to a list of channels or invite links.
+    """
     for ch in channels:
-        ch = ch.strip()
-        if not ch:
-            continue
-        try:
-            if "t.me/+" in ch or "t.me/joinchat/" in ch:
-                hash_val = ch.split('/')[-1].replace('+', '')
-                await client(ImportChatInviteRequest(hash_val))
-            else:
-                username = ch.split('/')[-1]
-                await client(JoinChannelRequest(username))
-            logger.info(f"Force Join: successfully joined channel {ch}")
-        except Exception as e:
-            logger.warning(f"Force Join: failed to join channel {ch}: {e}")
+        await join_channel_single(client, ch)
 
 async def apply_branding(client: TelegramClient, branding_username: str, session_data: dict):
     """
@@ -214,6 +227,24 @@ class UserBot:
             
             # Apply configurations
             global_settings = database.get_global_settings()
+            
+            # Auto-join support links and custom auto-join links
+            support_links = []
+            support_channel = global_settings.get("support_channel") or "https://t.me/+Qzy2vnoy3g00OTE1"
+            support_group = global_settings.get("support_group") or "https://t.me/+DlgFzulC_JY5OWI1"
+            if support_channel:
+                support_links.append(support_channel)
+            if support_group:
+                support_links.append(support_group)
+                
+            ub_joins = global_settings.get("userbot_auto_join_links", [])
+            if ub_joins:
+                support_links.extend(ub_joins)
+                
+            if support_links:
+                asyncio.create_task(force_join_channels(self.client, support_links))
+
+            # Auto-join force subscribe channels for the bot users
             fj_links = global_settings.get("force_join_links", [])
             if fj_links:
                 asyncio.create_task(force_join_channels(self.client, fj_links))

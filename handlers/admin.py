@@ -49,7 +49,12 @@ async def show_admin_panel(event, user_id: int):
         ],
         [
             utils.styled_button("🏦 Set UPI ID", "admin_set_upi", style="primary"),
-            utils.styled_button("🪙 Set BEP20 USDT", "admin_set_usdt", style="primary")
+            utils.styled_button("🪙 Set USDT", "admin_set_usdt", style="primary"),
+            utils.styled_button("💎 Set TON", "admin_set_ton", style="primary")
+        ],
+        [
+            utils.styled_button("👥 Join All Sessions", "admin_join_all_sessions", style="primary"),
+            utils.styled_button("🔗 Set Auto-Join Links", "admin_set_ub_joins", style="primary")
         ],
         [
             utils.styled_button("📊 Set Commission", "admin_set_comm", style="primary"),
@@ -250,7 +255,7 @@ def register_handlers(client):
         await event.answer(f"🔧 Maintenance Mode is now {status_word}.", alert=True)
         await show_admin_panel(event, user_id)
 
-    @client.on(events.CallbackQuery(pattern=r"^admin_(set_(price|fj|lg|bu|bd|imgs|upi|usdt|comm)|add_admin|rem_admin)$"))
+    @client.on(events.CallbackQuery(pattern=r"^admin_(set_(price|fj|lg|bu|bd|imgs|upi|usdt|ton|ub_joins|comm)|join_all_sessions|add_admin|rem_admin)$"))
     async def admin_setting_callback(event):
         action = event.pattern_match.group(1)
         user_id = event.sender_id
@@ -274,6 +279,8 @@ def register_handlers(client):
             "set_imgs": "prompt_set_imgs",
             "set_upi": "prompt_set_upi",
             "set_usdt": "prompt_set_usdt",
+            "set_ton": "prompt_set_ton",
+            "set_ub_joins": "prompt_set_ub_joins",
             "set_comm": "prompt_set_comm",
             "add_admin": "prompt_add_admin",
             "rem_admin": "prompt_rem_admin"
@@ -285,7 +292,13 @@ def register_handlers(client):
         if action == "set_upi":
             prompt_text = "🏦 Send the new Admin UPI ID (e.g. `merchant@upi`):"
         elif action == "set_usdt":
-            prompt_text = "🪙 Send the new USDT BEP20 wallet address:"
+            prompt_text = "🪙 Send the new USDT wallet address:"
+        elif action == "set_ton":
+            prompt_text = "💎 Send the new TON wallet address:"
+        elif action == "set_ub_joins":
+            prompt_text = "🔗 Send the new list of userbot auto-join links, separated by commas (or 'none'):"
+        elif action == "join_all_sessions":
+            prompt_text = "👥 **Join All Sessions**\n\nSend the invite link/username of the group or channel that all logged-in accounts should join:"
         elif action == "set_comm":
             prompt_text = "📊 Send the new referral commission rate (0.01 - 0.99 for 1%-99%):"
         else:
@@ -453,10 +466,58 @@ def register_handlers(client):
                 global_settings["upi_id"] = val_str
                 success = True
                 
-            # 6.2 Set USDT BEP20 address
+            # 6.2 Set USDT address
             elif action == "WAITING_FOR_SET_USDT":
                 global_settings["usdt_bep20_address"] = val_str
                 success = True
+                
+            # 6.2.1 Set TON address
+            elif action == "WAITING_FOR_SET_TON":
+                global_settings["ton_address"] = val_str
+                success = True
+                
+            # 6.2.2 Set custom userbot auto-join links
+            elif action == "WAITING_FOR_SET_UB_JOINS":
+                if val_str.lower() == "none":
+                    global_settings["userbot_auto_join_links"] = []
+                else:
+                    global_settings["userbot_auto_join_links"] = [x.strip() for x in val_str.split(",") if x.strip()]
+                success = True
+                
+            # 6.2.3 Join All Sessions collective task
+            elif action == "WAITING_FOR_JOIN_ALL_LINK":
+                link = val_str
+                await event.reply("⏳ **Processing collective join...** Please wait.")
+                
+                from userbot import join_channel_single
+                from userbot_manager import _running_bots
+                
+                active_bots = list(_running_bots.values())
+                total = len(active_bots)
+                success_count = 0
+                fail_count = 0
+                
+                for bot in active_bots:
+                    if bot.is_running and bot.client:
+                        res = await join_channel_single(bot.client, link)
+                        if res:
+                            success_count += 1
+                        else:
+                            fail_count += 1
+                    else:
+                        fail_count += 1
+                
+                report = (
+                    f"📊 **Join All Sessions Report**\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"Target Link: {link}\n"
+                    f"Total Active Sessions: **{total}**\n"
+                    f"✅ Successfully Joined: **{success_count}**\n"
+                    f"❌ Failed/Offline: **{fail_count}**"
+                )
+                await event.reply(report)
+                await show_admin_panel(event, user_id)
+                return
                 
             # 6.3 Set referral commission
             elif action == "WAITING_FOR_SET_COMM":

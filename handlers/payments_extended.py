@@ -282,7 +282,8 @@ def register_handlers(client):
         
         buttons = [
             [utils.styled_button("💳 UPI Payment", f"pay_method_upi_{qty}_{payment_id}", style="primary")],
-            [utils.styled_button("🪙 USDT (BEP20)", f"pay_method_usdt_{qty}_{payment_id}", style="primary")]
+            [utils.styled_button("🪙 USDT (BEP20)", f"pay_method_usdt_{qty}_{payment_id}", style="primary")],
+            [utils.styled_button("💎 TON (Toncoin)", f"pay_method_ton_{qty}_{payment_id}", style="primary")]
         ]
         
         # Allow paying using wallet if balance covers it
@@ -375,8 +376,8 @@ def register_handlers(client):
         from handlers.settings import show_settings_menu
         await show_settings_menu(event, user_id)
 
-    # ==================== Payment Handler (UPI/USDT details) ====================
-    @client.on(events.CallbackQuery(pattern=r"^pay_method_(upi|usdt)_(\d+)_(.+)$"))
+    # ==================== Payment Handler (UPI/USDT/TON details) ====================
+    @client.on(events.CallbackQuery(pattern=r"^pay_method_(upi|usdt|ton)_(\d+)_(.+)$"))
     async def pay_invoice_callback(event):
         method = event.pattern_match.group(1)
         qty = int(event.pattern_match.group(2))
@@ -412,8 +413,11 @@ def register_handlers(client):
             import urllib.parse
             upi_uri = f"upi://pay?pa={upi_id}&pn=VillainUserBot&am={cost_inr:.2f}&cu=INR&tn={payment_id}"
             qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={urllib.parse.quote(upi_uri)}"
-        else:
+        elif method == "usdt":
             address_text = f"🪙 USDT (BEP20) Address:\n`{global_settings.get('usdt_bep20_address', '0x000')}`"
+            qr_url = None
+        else: # ton
+            address_text = f"💎 TON (Toncoin) Address:\n`{global_settings.get('ton_address', 'UQ00000000000000000000000000000000000000000000000')}`"
             qr_url = None
             
         text = (

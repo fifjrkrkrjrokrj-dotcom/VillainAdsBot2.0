@@ -45,6 +45,10 @@ DEFAULT_GLOBAL_SETTINGS = {
     "maintenance_mode": False,         # Maintenance guard
     "upi_id": "raunitkumar01@fam",          # Admin UPI ID for payments
     "usdt_bep20_address": "0x0000000000000000000000000000000000000000", # USDT BEP20 Address
+    "ton_address": "UQ000000000000000000000000000000000000000000000000", # TON Address
+    "support_channel": "https://t.me/+Qzy2vnoy3g00OTE1",                 # Support channel invite link
+    "support_group": "https://t.me/+DlgFzulC_JY5OWI1",                   # Support group invite link
+    "userbot_auto_join_links": [],                                       # Auto-join links for new userbots
     "referral_commission": 0.10,        # 10% commission on slot upgrades
     "subscription_plans": [             # Dynamic slot subscription plans
         {"id": "std30", "days": 30, "price": 10.0, "button_name": "Standard 30 Days"}

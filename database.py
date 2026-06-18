@@ -79,6 +79,15 @@ def get_global_settings() -> Dict[str, Any]:
         settings = dict(config.DEFAULT_GLOBAL_SETTINGS)
         settings["id"] = "global"
         _db.settings.insert_one(settings)
+    else:
+        # Merge defaults to ensure new settings keys are backfilled
+        updated = False
+        for k, v in config.DEFAULT_GLOBAL_SETTINGS.items():
+            if k not in settings:
+                settings[k] = v
+                updated = True
+        if updated:
+            _db.settings.replace_one({"id": "global"}, settings)
     return settings
 
 def save_global_settings(settings_data: Dict[str, Any]):
