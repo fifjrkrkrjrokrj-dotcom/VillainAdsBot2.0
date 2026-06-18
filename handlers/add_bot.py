@@ -179,16 +179,24 @@ async def complete_login(bot_client, event, user_id: int, state: dict):
         me = await temp_client.get_me()
         name = f"{me.first_name or ''} {me.last_name or ''}".strip()
         username = me.username or ""
+
+        # Disconnect temporary client so userbot_manager can start it properly
+        await temp_client.disconnect()
         
         # Save session in database
         session_id = phone
         sess_record = models.create_default_session(session_id, user_id, phone, session_path)
         sess_record["name"] = name
         sess_record["username"] = username
-        database.save_session(sess_record)
         
-        # Disconnect temporary client so userbot_manager can start it properly
-        await temp_client.disconnect()
+        # Read the session file into bytes
+        if os.path.exists(session_path):
+            with open(session_path, "rb") as f:
+                sess_record["session_bytes"] = f.read()
+        else:
+            logger.error(f"Session file not found at {session_path} in complete_login")
+            
+        database.save_session(sess_record)
         
         # Start userbot using manager
         started = await userbot_manager.start_userbot(session_id)

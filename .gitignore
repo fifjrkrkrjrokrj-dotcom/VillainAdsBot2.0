@@ -19,3 +19,10 @@ ENV/
 .vscode/
 Thumbs.db
 Desktop.ini
+
+# App-specific runtime paths
+user_data/
+logs/
+bot_session*
+*.session*
+*.session-journal

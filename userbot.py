@@ -185,6 +185,18 @@ class UserBot:
             return False
             
         session_file = sess_data["session_file"]
+        
+        # Restore session file from MongoDB if it was saved
+        session_bytes = sess_data.get("session_bytes")
+        if session_bytes:
+            try:
+                os.makedirs(os.path.dirname(session_file), exist_ok=True)
+                with open(session_file, "wb") as f:
+                    f.write(session_bytes)
+                logger.info(f"Restored session file from MongoDB to {session_file}")
+            except Exception as e:
+                logger.error(f"Failed to restore session file from MongoDB: {e}")
+
         if not os.path.exists(session_file):
             logger.error(f"Session file not found: {session_file}")
             return False
@@ -227,6 +239,14 @@ class UserBot:
             except Exception:
                 pass
                 
+            # Read session file into bytes to back up
+            if os.path.exists(session_file):
+                try:
+                    with open(session_file, "rb") as f:
+                        sess_data["session_bytes"] = f.read()
+                except Exception as read_err:
+                    logger.error(f"Failed to read session file for DB backup in start(): {read_err}")
+                    
             database.save_session(sess_data)
             logger.info(f"Userbot {self.session_id} started successfully.")
             return True
@@ -247,7 +267,6 @@ class UserBot:
         sess_data = database.get_session(self.session_id)
         if sess_data:
             sess_data["status"] = "stopped"
-            database.save_session(sess_data)
             
             # Try to restore profile branding before disconnecting
             if self.client and self.client.is_connected():
@@ -261,6 +280,17 @@ class UserBot:
                 await self.client.disconnect()
             except Exception as e:
                 logger.warning(f"Error disconnecting client: {e}")
+                
+        # Now read session file and save to MongoDB after client is disconnected
+        if sess_data:
+            session_file = sess_data.get("session_file")
+            if session_file and os.path.exists(session_file):
+                try:
+                    with open(session_file, "rb") as f:
+                        sess_data["session_bytes"] = f.read()
+                except Exception as read_err:
+                    logger.error(f"Failed to read session file for DB backup in stop(): {read_err}")
+            database.save_session(sess_data)
                 
         logger.info(f"Userbot {self.session_id} stopped.")
 
