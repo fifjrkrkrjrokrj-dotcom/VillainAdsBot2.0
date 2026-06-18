@@ -167,11 +167,16 @@ def register_handlers(client):
                     logger.info(f"New user {user_id} referred by {ref_id}. Credited ₹1 to referrer.")
                     
                     try:
+                        name_str = f"@{sender_username}" if sender_username else f"{sender_first or ''} {sender_last or ''}".strip()
+                        if not name_str:
+                            name_str = f"User {user_id}"
+                            
                         await client.send_message(
                             ref_id,
                             f"🎁 **New Referral!**\n"
-                            f"A new user started the bot using your referral link.\n"
-                            f"**₹1.00** has been credited to your wallet balance."
+                            f"━━━━━━━━━━━━━━━━━━━━\n"
+                            f"👤 **{name_str}** joined the bot using your link.\n"
+                            f"💰 Your reward **₹1.00** has been credited to your wallet balance."
                         )
                     except Exception as ref_err:
                         logger.warning(f"Could not notify referrer {ref_id}: {ref_err}")

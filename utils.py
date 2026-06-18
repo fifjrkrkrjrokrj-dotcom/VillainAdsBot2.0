@@ -54,7 +54,11 @@ async def show_help(event, action_key: str, user_id: int):
     
     # Fallback to generic message if missing
     if hint.startswith(f"[help_"):
-        hint = "Click to proceed."
+        try:
+            await event.answer()
+        except Exception as e:
+            logger.error(f"Failed to answer callback silently: {e}")
+        return
         
     # Determine alert level: alert=True for risky/important actions, False for subtle
     show_alert = False
@@ -75,10 +79,25 @@ def ensure_user_dir(user_id: int) -> str:
     os.makedirs(path, exist_ok=True)
     return path
 
+import time
+
+# In-memory cache for force subscribe checks
+# Format: {user_id: (expiry_timestamp, not_joined_list)}
+_force_sub_cache = {}
+
 async def check_force_sub(client, user_id: int) -> list:
     """
     Checks if a user is subscribed to all force subscribe channels defined by admin.
+    Caches successful checks to make the bot faster and prevent rate limits.
     """
+    now = time.time()
+    
+    # Check cache
+    if user_id in _force_sub_cache:
+        expiry, cached_not_joined = _force_sub_cache[user_id]
+        if now < expiry:
+            return cached_not_joined
+            
     from telethon.tl.functions.channels import GetParticipantRequest
     from telethon.errors import UserNotParticipantError
     
@@ -95,6 +114,13 @@ async def check_force_sub(client, user_id: int) -> list:
         except (UserNotParticipantError, Exception) as e:
             logger.debug(f"User {user_id} not in channel {ch_id}: {e}")
             not_joined.append(ch)
+            
+    # Cache the result.
+    # If they joined everything, cache it for 60 seconds.
+    # If they are missing some channels, cache it for only 5 seconds.
+    cache_duration = 60 if not not_joined else 5
+    _force_sub_cache[user_id] = (now + cache_duration, not_joined)
+    
     return not_joined
 
 async def send_force_sub_msg(event, not_joined: list, lang: str):
@@ -283,14 +309,18 @@ def style_keyboard(buttons):
     
     for row in grid:
         for btn in row:
-            # Check if it is an inline callback button (has data/callback payload and no url)
-            if hasattr(btn, "data") and btn.data and not getattr(btn, "url", None):
+            # Check if it is a button (has text attribute)
+            if hasattr(btn, "text"):
                 # Apply repeating loop style
                 style = styles[btn_index % len(styles)]
                 btn_index += 1
                 
-                # Check for semantic overrides
-                data_str = btn.data.decode("utf-8") if isinstance(btn.data, bytes) else str(btn.data)
+                # Check for semantic overrides based on data or url
+                data_str = ""
+                if hasattr(btn, "data") and btn.data:
+                    data_str = btn.data.decode("utf-8") if isinstance(btn.data, bytes) else str(btn.data)
+                elif hasattr(btn, "url") and btn.url:
+                    data_str = btn.url
                 
                 # Destructive/dangerous actions: RED (danger)
                 if any(x in data_str for x in ["stop_bot", "delete_bot", "reject_payment", "cancel_login", "cancel_admin"]):
