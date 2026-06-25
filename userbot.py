@@ -187,6 +187,45 @@ class UserBot:
         self.broadcast_task: Optional[asyncio.Task] = None
         self.joined_vcs: Set[int] = set()
         self.tag_cooldown = {}
+        
+        # Caching attributes to resolve performance bottlenecks
+        self.settings = {}
+        self.groups_cache = None
+        self.groups_cache_time = 0.0
+
+    def reload_settings(self):
+        """
+        Reloads userbot settings from MongoDB into memory.
+        """
+        sess_data = database.get_session(self.session_id)
+        if sess_data:
+            self.settings = sess_data.get("settings", {})
+            logger.info(f"Reloaded in-memory settings for userbot {self.session_id}")
+
+    async def get_groups(self, force_refresh: bool = False) -> list:
+        """
+        Returns group dialogs, utilizing a 1-hour cache to avoid heavy Telegram API calls.
+        """
+        current_time = time.time()
+        # Cache dialogs for 1 hour (3600 seconds) unless force-refreshed
+        if force_refresh or not self.groups_cache or (current_time - self.groups_cache_time > 3600):
+            try:
+                logger.info(f"Fetching dialogs for userbot {self.session_id} to refresh groups cache...")
+                dialogs = await self.client.get_dialogs()
+                self.groups_cache = [d for d in dialogs if d.is_group]
+                self.groups_cache_time = current_time
+                
+                # Update DB stats concurrently
+                sess_data = database.get_session(self.session_id)
+                if sess_data:
+                    sess_data["stats"]["group_count"] = len(self.groups_cache)
+                    sess_data["stats"]["user_count"] = sum(1 for d in dialogs if d.is_user)
+                    database.save_session(sess_data)
+            except Exception as e:
+                logger.error(f"Error fetching dialogs for userbot {self.session_id}: {e}")
+                if not self.groups_cache:
+                    self.groups_cache = []
+        return self.groups_cache
 
     async def start(self) -> bool:
         if self.is_running:
@@ -197,6 +236,8 @@ class UserBot:
             logger.error(f"Session data not found in DB for {self.session_id}")
             return False
             
+        # Initialize in-memory settings
+        self.settings = sess_data.get("settings", {})
         session_file = sess_data["session_file"]
         
         # Restore session file from MongoDB if it was saved
@@ -331,65 +372,56 @@ class UserBot:
             if not self.is_running:
                 return
                 
+            # Quick in-memory checks before performing heavy database queries
+            if not event.is_private:
+                return
+                
+            if not self.settings.get("auto_welcome"):
+                return
+                
+            sender = await event.get_sender()
+            if not sender or sender.bot:
+                return
+                
+            # Fetch session only if conditions are met to append welcomed users
             sess_data = database.get_session(self.session_id)
             if not sess_data:
                 return
                 
             settings = sess_data.get("settings", {})
             
-            # 1. Private chat automations
-            if event.is_private:
-                sender = await event.get_sender()
-                if not sender or sender.bot:
-                    return
-                
-                # Auto-Welcome
-                if settings.get("auto_welcome"):
-                    welcomed_users = sess_data.get("stats", {}).get("welcomed_users", [])
-                    if sender.id not in welcomed_users:
-                        welcome_msg = settings.get("welcome_msg", "")
-                        if welcome_msg:
-                            try:
-                                await event.reply(welcome_msg)
-                                welcomed_users.append(sender.id)
-                                sess_data["stats"]["welcomed_users"] = welcomed_users
-                                database.save_session(sess_data)
-                            except Exception as e:
-                                logger.warning(f"Could not send welcome message to {sender.id}: {e}")
-            # 2. Group automations
-            elif event.is_group:
-                pass
-
+            # Auto-Welcome
+            welcomed_users = sess_data.get("stats", {}).get("welcomed_users", [])
+            if sender.id not in welcomed_users:
+                welcome_msg = settings.get("welcome_msg", "")
+                if welcome_msg:
+                    try:
+                        await event.reply(welcome_msg)
+                        welcomed_users.append(sender.id)
+                        sess_data["stats"]["welcomed_users"] = welcomed_users
+                        database.save_session(sess_data)
+                    except Exception as e:
+                        logger.warning(f"Could not send welcome message to {sender.id}: {e}")
 
     async def broadcast_loop(self):
         """
         Periodically broadcasts the configured message to all group dialogs.
         """
         while self.is_running:
-            sess_data = database.get_session(self.session_id)
-            if not sess_data:
-                break
-                
-            settings = sess_data.get("settings", {})
-            if settings.get("auto_spam"):
-                msg = settings.get("broadcast_msg")
+            if self.settings.get("auto_spam"):
+                msg = self.settings.get("broadcast_msg")
                 if msg:
                     try:
-                        dialogs = await self.client.get_dialogs()
-                        groups = [d for d in dialogs if d.is_group]
-                        
-                        # Cache counters in DB
-                        sess_data["stats"]["group_count"] = len(groups)
-                        sess_data["stats"]["user_count"] = sum(1 for d in dialogs if d.is_user)
-                        database.save_session(sess_data)
+                        # Use cached groups (fetches once an hour unless manually refreshed)
+                        groups = await self.get_groups()
                         
                         sent_to_some = False
                         for g in groups:
                             if not self.is_running:
                                 break
-                            # Read fresh database session each iteration to support real-time toggles
-                            fresh_sess = database.get_session(self.session_id)
-                            if not fresh_sess or not fresh_sess.get("settings", {}).get("auto_spam"):
+                                
+                            # Check cached state in real-time
+                            if not self.settings.get("auto_spam"):
                                 break
                                 
                             try:
@@ -407,8 +439,8 @@ class UserBot:
                     except Exception as e:
                         logger.error(f"Error inside userbot broadcast loop execution: {e}")
             
-            # Fetch broadcast interval
-            interval = settings.get("broadcast_interval", 300)
+            # Fetch broadcast interval from in-memory settings
+            interval = self.settings.get("broadcast_interval", 300)
             # Sleep in chunks to allow graceful termination
             for _ in range(max(1, int(interval))):
                 if not self.is_running:

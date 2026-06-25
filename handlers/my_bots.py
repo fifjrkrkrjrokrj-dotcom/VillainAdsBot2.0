@@ -437,6 +437,7 @@ def register_handlers(client):
             db_key = key_map[feature]
             settings[db_key] = not settings.get(db_key, False)
             database.save_session(sess)
+            userbot_manager.reload_bot_settings(phone)
             
             state_word = "ON" if settings[db_key] else "OFF"
             feature_name = feature.upper()
@@ -456,13 +457,10 @@ def register_handlers(client):
             if userbot_manager.is_bot_running(phone):
                 bot_obj = userbot_manager._running_bots[phone]
                 try:
-                    dialogs = await bot_obj.client.get_dialogs()
-                    groups = [d for d in dialogs if d.is_group]
-                    users = sum(1 for d in dialogs if d.is_user)
-                    
-                    sess["stats"]["group_count"] = len(groups)
-                    sess["stats"]["user_count"] = users
-                    database.save_session(sess)
+                    # Force refresh the groups cache, which also updates the DB stats
+                    groups = await bot_obj.get_groups(force_refresh=True)
+                    sess = database.get_session(phone)
+                    users = sess["stats"]["user_count"]
                     
                     flash = f"🔄 **Stats refreshed! Groups: {len(groups)} | Contacts: {users}**"
                 except Exception as e:
@@ -540,6 +538,7 @@ def register_handlers(client):
         if sess and sess.get("user_id") == user_id:
             sess["settings"]["broadcast_interval"] = val
             database.save_session(sess)
+            userbot_manager.reload_bot_settings(phone)
             flash = f"⏱️ **Interval updated to {val}s**"
             
         await show_bot_dashboard(event, phone, user_id, flash_message=flash)
@@ -653,4 +652,5 @@ def register_handlers(client):
                 return
                 
         # Return to dashboard showing updated stats and flash notification
+        userbot_manager.reload_bot_settings(phone)
         await show_bot_dashboard(event, phone, user_id, flash_message=flash)

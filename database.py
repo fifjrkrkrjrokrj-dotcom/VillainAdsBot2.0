@@ -31,6 +31,48 @@ def db_init():
             _db = _mongo_client.get_database(config.DEFAULT_DB_NAME)
         logger.info("Successfully connected to MongoDB.")
         
+        # Create indexes to prevent slow collection scans as database grows
+        try:
+            _db.users.create_index("user_id", unique=True)
+        except Exception as idx_err:
+            logger.warning(f"Could not create unique index on users.user_id: {idx_err}")
+            _db.users.create_index("user_id")
+            
+        _db.users.create_index("username")
+        
+        try:
+            _db.sessions.create_index("session_id", unique=True)
+        except Exception as idx_err:
+            logger.warning(f"Could not create unique index on sessions.session_id: {idx_err}")
+            _db.sessions.create_index("session_id")
+            
+        _db.sessions.create_index("user_id")
+        
+        try:
+            _db.payments.create_index("payment_id", unique=True)
+        except Exception as idx_err:
+            logger.warning(f"Could not create unique index on payments.payment_id: {idx_err}")
+            _db.payments.create_index("payment_id")
+            
+        _db.payments.create_index("user_id")
+        _db.payments.create_index("utr_code")
+        
+        try:
+            _db.coupons.create_index("code", unique=True)
+        except Exception as idx_err:
+            logger.warning(f"Could not create unique index on coupons.code: {idx_err}")
+            _db.coupons.create_index("code")
+            
+        _db.coupon_usage.create_index([("code", 1), ("user_id", 1)])
+        
+        try:
+            _db.force_channels.create_index("channel_id", unique=True)
+        except Exception as idx_err:
+            logger.warning(f"Could not create unique index on force_channels.channel_id: {idx_err}")
+            _db.force_channels.create_index("channel_id")
+            
+        logger.info("Database indexes checked/created successfully.")
+        
         # Initialize default settings if not exists
         settings = _db.settings.find_one({"id": "global"})
         if not settings:
@@ -165,3 +207,9 @@ def count_referred_users(user_id: int) -> int:
     Counts the number of users referred by the given user_id.
     """
     return _db.users.count_documents({"referred_by": user_id})
+
+def get_payment_request_by_utr_and_status(utr: str, status: str = "pending") -> Optional[Dict[str, Any]]:
+    """
+    Looks up a payment request by UTR and status directly using index.
+    """
+    return _db.payments.find_one({"utr_code": utr, "status": status})

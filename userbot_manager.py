@@ -263,3 +263,10 @@ async def restore_original_profile(session_id: str) -> tuple:
     except Exception as e:
         logger.error(f"Error restoring original profile: {e}")
         return False, f"Error: {e}"
+
+def reload_bot_settings(session_id: str):
+    """
+    Reloads the in-memory settings of a running userbot.
+    """
+    if session_id in _running_bots:
+        _running_bots[session_id].reload_settings()

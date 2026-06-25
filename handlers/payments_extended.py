@@ -811,80 +811,78 @@ async def approve_matching_payment(bot_client, utr: str, amount: float):
     """
     Checks if there is a pending payment matching this UTR code, and approves it.
     """
-    payments = database.get_payment_requests()
-    for pay in payments:
-        if pay.get("status") == "pending" and pay.get("utr_code") == utr:
-            user_id = pay["user_id"]
-            qty = pay["count"]
-            payment_id = pay["payment_id"]
+    pay = database.get_payment_request_by_utr_and_status(utr, "pending")
+    if pay:
+        user_id = pay["user_id"]
+        qty = pay["count"]
+        payment_id = pay["payment_id"]
+        
+        # Approve payment
+        pay["status"] = "approved"
+        pay["auto_approved"] = True
+        database.save_payment_request(pay)
+        
+        # Upgrade user slots subscription
+        user = database.get_user(user_id)
+        if user:
+            days = pay.get("days", 30)
+            plan_name = pay.get("plan_name", "Slot Upgrade")
+            expires_at = utils.allocate_slots_subscription(
+                user_id, qty, days, plan_name, payment_id
+            )
             
-            # Approve payment
-            pay["status"] = "approved"
-            pay["auto_approved"] = True
-            database.save_payment_request(pay)
-            
-            # Upgrade user slots subscription
-            user = database.get_user(user_id)
-            if user:
-                days = pay.get("days", 30)
-                plan_name = pay.get("plan_name", "Slot Upgrade")
-                expires_at = utils.allocate_slots_subscription(
-                    user_id, qty, days, plan_name, payment_id
+            # Notify User
+            try:
+                import datetime
+                expiry_str = datetime.datetime.fromtimestamp(expires_at).strftime('%d %b %Y %H:%M')
+                await bot_client.send_message(
+                    user_id,
+                    f"🎉 **Payment Automatically Verified!**\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"Your payment with UTR `{utr}` has been auto-approved.\n"
+                    f"Slots added: **{qty}**\n"
+                    f"New slots limit: **{user['allowed_slots']}**"
                 )
+            except Exception as ne:
+                logger.warning(f"Failed to notify user: {ne}")
                 
-                # Notify User
-                try:
-                    import datetime
-                    expiry_str = datetime.datetime.fromtimestamp(expires_at).strftime('%d %b %Y %H:%M')
-                    await bot_client.send_message(
-                        user_id,
-                        f"🎉 **Payment Automatically Verified!**\n"
-                        f"━━━━━━━━━━━━━━━━━━━━\n"
-                        f"Your payment with UTR `{utr}` has been auto-approved.\n"
-                        f"Slots added: **{qty}**\n"
-                        f"New slots limit: **{user['allowed_slots']}**"
-                    )
-                except Exception as ne:
-                    logger.warning(f"Failed to notify user: {ne}")
-                    
-            # Log to Admin Channel
-            global_settings = database.get_global_settings()
-            log_group_id = global_settings.get("log_group_id")
-            if log_group_id:
-                try:
-                    user_mention = f"[{user_id}](tg://user?id={user_id})"
-                    await bot_client.send_message(
-                        log_group_id,
-                        f"✅ **Auto-Payment Approved (Gmail)**\n"
-                        f"━━━━━━━━━━━━━━━━━━━━\n"
-                        f"User: {user_mention} (`{user_id}`)\n"
-                        f"Amount: ₹{amount}\n"
-                        f"UTR Code: `{utr}`\n"
-                        f"Slots upgraded: **{qty}**"
-                    )
-                except Exception as le:
-                    logger.warning(f"Failed to log to admin group: {le}")
-                    
-            # Apply referral commission
-            if user:
-                referrer_id = user.get("referred_by")
-                if referrer_id:
-                    ref_user = database.get_user(referrer_id)
-                    if ref_user:
-                        comm_rate = global_settings.get("referral_commission", 0.10)
-                        commission = (global_settings.get("price_per_id", 10.0) * qty) * comm_rate
-                        ref_user["wallet_balance"] = ref_user.get("wallet_balance", 0.0) + commission
-                        ref_user["referral_earnings"] = ref_user.get("referral_earnings", 0.0) + commission
-                        database.save_user(ref_user)
-                        try:
-                            await bot_client.send_message(
-                                referrer_id,
-                                f"💰 **Commission Received!**\n"
-                                f"Referred user upgraded slots. **₹{commission:.2f}** added to your wallet."
-                            )
-                        except Exception:
-                            pass
-            break
+        # Log to Admin Channel
+        global_settings = database.get_global_settings()
+        log_group_id = global_settings.get("log_group_id")
+        if log_group_id:
+            try:
+                user_mention = f"[{user_id}](tg://user?id={user_id})"
+                await bot_client.send_message(
+                    log_group_id,
+                    f"✅ **Auto-Payment Approved (Gmail)**\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"User: {user_mention} (`{user_id}`)\n"
+                    f"Amount: ₹{amount}\n"
+                    f"UTR Code: `{utr}`\n"
+                    f"Slots upgraded: **{qty}**"
+                )
+            except Exception as le:
+                logger.warning(f"Failed to log to admin group: {le}")
+                
+        # Apply referral commission
+        if user:
+            referrer_id = user.get("referred_by")
+            if referrer_id:
+                ref_user = database.get_user(referrer_id)
+                if ref_user:
+                    comm_rate = global_settings.get("referral_commission", 0.10)
+                    commission = (global_settings.get("price_per_id", 10.0) * qty) * comm_rate
+                    ref_user["wallet_balance"] = ref_user.get("wallet_balance", 0.0) + commission
+                    ref_user["referral_earnings"] = ref_user.get("referral_earnings", 0.0) + commission
+                    database.save_user(ref_user)
+                    try:
+                        await bot_client.send_message(
+                            referrer_id,
+                            f"💰 **Commission Received!**\n"
+                            f"Referred user upgraded slots. **₹{commission:.2f}** added to your wallet."
+                        )
+                    except Exception:
+                        pass
 
 async def start_gmail_polling(bot_client):
     """
