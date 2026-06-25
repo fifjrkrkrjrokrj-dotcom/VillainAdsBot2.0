@@ -33,6 +33,9 @@ async def show_admin_panel(event, user_id: int):
     global_settings = database.get_global_settings()
     maint_text = "🔴 Disable Maintenance" if global_settings.get("maintenance_mode", False) else "🟢 Enable Maintenance"
     
+    brand_name_val = "✅ ON" if global_settings.get("branding_name_enabled", True) else "❌ OFF"
+    brand_bio_val = "✅ ON" if global_settings.get("branding_bio_enabled", True) else "❌ OFF"
+    
     text = utils.get_text("admin_title", lang)
     buttons = [
         [
@@ -46,6 +49,10 @@ async def show_admin_panel(event, user_id: int):
         [
             utils.styled_button(utils.get_text("btn_set_bd", lang), "admin_set_bd", style="primary"),
             utils.styled_button(utils.get_text("btn_set_imgs", lang), "admin_set_imgs", style="primary")
+        ],
+        [
+            utils.styled_button(f"📛 Name Branding: {brand_name_val}", "admin_toggle_brand_name", style="primary"),
+            utils.styled_button(f"📝 Bio Branding: {brand_bio_val}", "admin_toggle_brand_bio", style="primary")
         ],
         [
             utils.styled_button("🏦 Set UPI ID", "admin_set_upi", style="primary"),
@@ -766,6 +773,20 @@ def register_handlers(client):
         if not check_admin(user_id):
             return
         await process_admin_usr_search(event, str(target_uid), "bal")
+
+    @client.on(events.CallbackQuery(pattern=r"^admin_toggle_brand_(name|bio)$"))
+    async def toggle_branding_elements_callback(event):
+        element = event.pattern_match.group(1)
+        user_id = event.sender_id
+        if not check_admin(user_id):
+            return
+            
+        global_settings = database.get_global_settings()
+        key = f"branding_{element}_enabled"
+        global_settings[key] = not global_settings.get(key, True)
+        database.save_global_settings(global_settings)
+        
+        await show_admin_panel(event, user_id)
 
 
 async def process_admin_usr_search(event, search_query: str, action: str):

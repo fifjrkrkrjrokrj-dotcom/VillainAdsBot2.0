@@ -49,6 +49,8 @@ TRANSLATIONS = {
         "btn_refresh_stats": "🔄 Refresh Stats",
         "btn_delete_bot": "🗑️ Delete Bot",
         "btn_back_to_bots": "🔙 Back to Bots",
+        "btn_restart_bot": "🔄 Restart UserBot",
+        "btn_settings_info": "🔍 Settings Info",
         
         "help_start_bot": "ℹ️ Start this account's automation services in the background.",
         "help_stop_bot": "ℹ️ Stop this account's running automation tasks.",
@@ -209,6 +211,8 @@ TRANSLATIONS = {
         "btn_refresh_stats": "🔄 आँकड़े ताज़ा करें",
         "btn_delete_bot": "🗑️ बॉट हटाएँ",
         "btn_back_to_bots": "🔙 बॉट्स पर वापस जाएँ",
+        "btn_restart_bot": "🔄 यूज़रबॉट रीस्टार्ट करें",
+        "btn_settings_info": "🔍 सेटिंग्स जानकारी",
         
         "help_start_bot": "ℹ️ पृष्ठभूमि में इस खाते के स्वचालन कार्यों को प्रारंभ करें।",
         "help_stop_bot": "ℹ️ इस खाते के चल रहे स्वचालन कार्यों को रोकें।",

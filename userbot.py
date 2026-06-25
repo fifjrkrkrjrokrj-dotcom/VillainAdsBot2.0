@@ -122,13 +122,17 @@ async def force_join_channels(client: TelegramClient, channels: list):
 
 async def apply_branding(client: TelegramClient, branding_username: str, session_data: dict):
     """
-    Appends the branding bot username suffix to the userbot profile's name and bio.
+    Appends the branding bot username suffix to the userbot profile's name and bio based on global settings.
     Stores original details in session data for restoration.
     """
     from telethon.tl.functions.users import GetFullUserRequest
     from telethon.tl.functions.account import UpdateProfileRequest
     
     try:
+        global_settings = database.get_global_settings()
+        brand_name_enabled = global_settings.get("branding_name_enabled", True)
+        brand_bio_enabled = global_settings.get("branding_bio_enabled", True)
+        
         full_user = await client(GetFullUserRequest('me'))
         user_me = full_user.users[0]
         full_profile = full_user.full_user
@@ -144,20 +148,22 @@ async def apply_branding(client: TelegramClient, branding_username: str, session
         brand_suffix = f" via @{branding_username}"
         
         new_first_name = orig_first_name
-        if brand_suffix not in orig_first_name:
-            new_first_name = (orig_first_name + brand_suffix)[:64]
-            
+        if brand_name_enabled:
+            if brand_suffix not in orig_first_name:
+                new_first_name = (orig_first_name + brand_suffix)[:64]
+                
         new_bio = orig_bio
-        if brand_suffix not in orig_bio:
-            new_bio = (orig_bio + brand_suffix)[:70]
-            
+        if brand_bio_enabled:
+            if brand_suffix not in orig_bio:
+                new_bio = (orig_bio + brand_suffix)[:70]
+                
         await client(UpdateProfileRequest(
             first_name=new_first_name,
             about=new_bio
         ))
         
         database.save_session(session_data)
-        logger.info(f"Branding applied successfully for userbot: {user_me.id}")
+        logger.info(f"Branding applied successfully for userbot: {user_me.id} (Name: {brand_name_enabled}, Bio: {brand_bio_enabled})")
     except Exception as e:
         logger.error(f"Failed to apply branding: {e}")
 
@@ -195,12 +201,19 @@ class UserBot:
 
     def reload_settings(self):
         """
-        Reloads userbot settings from MongoDB into memory.
+        Reloads userbot settings from MongoDB into memory and restarts the broadcast task.
         """
         sess_data = database.get_session(self.session_id)
         if sess_data:
             self.settings = sess_data.get("settings", {})
             logger.info(f"Reloaded in-memory settings for userbot {self.session_id}")
+            
+            # Restart the broadcast task if the bot is currently running to apply changes immediately
+            if self.is_running:
+                if self.broadcast_task:
+                    self.broadcast_task.cancel()
+                self.broadcast_task = asyncio.create_task(self.broadcast_loop())
+                logger.info(f"Restarted broadcast loop for userbot {self.session_id} to apply new settings/interval immediately.")
 
     async def get_groups(self, force_refresh: bool = False) -> list:
         """

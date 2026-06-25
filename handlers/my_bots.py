@@ -175,10 +175,11 @@ async def show_bot_dashboard(event, phone: str, user_id: int, flash_message: Opt
     buttons = []
     rows = []
     
-    # Row 0: Start and Stop side-by-side
+    # Row 0: Start, Stop and Restart side-by-side
     rows.append([
         ("btn_start_bot", f"start_bot_{phone}"),
-        ("btn_stop_bot", f"stop_bot_{phone}")
+        ("btn_stop_bot", f"stop_bot_{phone}"),
+        ("btn_restart_bot", f"restart_bot_{phone}")
     ])
         
     # Row 1: Set Broadcast, Set Welcome
@@ -198,10 +199,11 @@ async def show_bot_dashboard(event, phone: str, user_id: int, flash_message: Opt
         ("btn_clone_profile", f"clone_profile_{phone}")
     ])
     
-    # Row 4: Help & How to Use (New!)
+    # Row 4: Help, How to Use & Settings Info
     rows.append([
         ("btn_help", f"help_bot_{phone}"),
-        ("btn_how_to_use", f"how_to_use_{phone}")
+        ("btn_how_to_use", f"how_to_use_{phone}"),
+        ("btn_settings_info", f"view_settings_info_{phone}")
     ])
 
     # Row 5: Change Name, Set Interval
@@ -236,6 +238,8 @@ async def show_bot_dashboard(event, phone: str, user_id: int, flash_message: Opt
                 style = "success"
             elif key in ("btn_stop_bot", "btn_delete_bot"):
                 style = "danger"
+            elif key == "btn_restart_bot":
+                style = "warning"
             elif override_style:
                 style = override_style
             else:
@@ -409,6 +413,67 @@ def register_handlers(client):
         # Stop bot
         await userbot_manager.stop_userbot(phone)
         await show_bot_dashboard(event, phone, user_id, flash_message="🔴 **Userbot stopped.**")
+
+    @client.on(events.CallbackQuery(pattern=r"^restart_bot_(.+)$"))
+    async def restart_bot_callback(event):
+        phone = event.pattern_match.group(1)
+        user_id = event.sender_id
+        
+        # Stop
+        await userbot_manager.stop_userbot(phone)
+        # Start
+        success = await userbot_manager.start_userbot(phone)
+        if success:
+            flash = "🔄 **Userbot successfully restarted!**"
+        else:
+            flash = "❌ **Failed to start Userbot after stopping.**"
+            
+        await show_bot_dashboard(event, phone, user_id, flash_message=flash)
+
+    @client.on(events.CallbackQuery(pattern=r"^view_settings_info_(.+)$"))
+    async def view_settings_info_callback(event):
+        phone = event.pattern_match.group(1)
+        user_id = event.sender_id
+        
+        sess = database.get_session(phone)
+        if not sess or sess.get("user_id") != user_id:
+            await event.answer("❌ Session error.", alert=True)
+            return
+            
+        settings = sess.get("settings", {})
+        
+        spam_status = "🟢 ON" if settings.get("auto_spam") else "🔴 OFF"
+        welcome_status = "🟢 ON" if settings.get("auto_welcome") else "🔴 OFF"
+        interval = settings.get("broadcast_interval", 300)
+        spam_msg = settings.get("broadcast_msg", "None")
+        welcome_msg = settings.get("welcome_msg", "None")
+        
+        # Format a clean message
+        text = (
+            f"ℹ️ **UserBot Settings Info**\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"📞 Account: `{phone}`\n"
+            f"🏷️ Name: **{sess.get('name', 'Userbot')}**\n"
+            f"🔗 Username: @{sess.get('username', 'None')}\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"📢 **Auto-Spam Settings**:\n"
+            f"• Status: {spam_status}\n"
+            f"• Interval: **{interval} seconds**\n"
+            f"• Broadcast Message:\n"
+            f"  `{spam_msg}`\n\n"
+            f"👋 **Auto-Welcome Settings**:\n"
+            f"• Status: {welcome_status}\n"
+            f"• Welcome Message:\n"
+            f"  `{welcome_msg}`\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"_Use the dashboard controls to edit these values._"
+        )
+        
+        buttons = [[utils.styled_button("🔙 Back to Dashboard", f"select_bot_{phone}", style="primary")]]
+        try:
+            await event.edit(text, buttons=buttons)
+        except Exception:
+            await event.respond(text, buttons=buttons)
 
     @client.on(events.CallbackQuery(pattern=r"^delete_bot_(.+)$"))
     async def delete_bot_callback(event):
