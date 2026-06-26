@@ -93,9 +93,10 @@ def db_init():
 
 # ==================== User CRUD Operations ====================
 def get_user(user_id: int) -> Optional[Dict[str, Any]]:
-    return _db.users.find_one({"user_id": user_id})
+    return _db.users.find_one({"user_id": {"$in": [int(user_id), str(user_id)]}})
 
 def save_user(user_data: Dict[str, Any]):
+    user_data["user_id"] = int(user_data["user_id"])
     _db.users.replace_one({"user_id": user_data["user_id"]}, user_data, upsert=True)
 
 def get_all_users() -> List[Dict[str, Any]]:
@@ -103,13 +104,17 @@ def get_all_users() -> List[Dict[str, Any]]:
 
 # ==================== Session CRUD Operations ====================
 def get_sessions(user_id: Optional[int] = None) -> List[Dict[str, Any]]:
-    query = {"user_id": user_id} if user_id is not None else {}
+    if user_id is not None:
+        query = {"user_id": {"$in": [int(user_id), str(user_id)]}}
+    else:
+        query = {}
     return list(_db.sessions.find(query))
 
 def get_session(session_id: str) -> Optional[Dict[str, Any]]:
     return _db.sessions.find_one({"session_id": session_id})
 
 def save_session(session_data: Dict[str, Any]):
+    session_data["user_id"] = int(session_data["user_id"])
     _db.sessions.replace_one({"session_id": session_data["session_id"]}, session_data, upsert=True)
 
 def delete_session(session_id: str):
@@ -117,13 +122,17 @@ def delete_session(session_id: str):
 
 # ==================== Payment CRUD Operations ====================
 def get_payment_requests(user_id: Optional[int] = None) -> List[Dict[str, Any]]:
-    query = {"user_id": user_id} if user_id is not None else {}
+    if user_id is not None:
+        query = {"user_id": {"$in": [int(user_id), str(user_id)]}}
+    else:
+        query = {}
     return list(_db.payments.find(query))
 
 def get_payment_request(payment_id: str) -> Optional[Dict[str, Any]]:
     return _db.payments.find_one({"payment_id": payment_id})
 
 def save_payment_request(payment_data: Dict[str, Any]):
+    payment_data["user_id"] = int(payment_data["user_id"])
     _db.payments.replace_one({"payment_id": payment_data["payment_id"]}, payment_data, upsert=True)
 
 # ==================== Settings CRUD Operations ====================
@@ -216,12 +225,12 @@ def delete_coupon(code: str):
 
 # ==================== Coupon Usage CRUD ====================
 def has_used_coupon(code: str, user_id: int) -> bool:
-    return _db.coupon_usage.find_one({"code": code, "user_id": user_id}) is not None
+    return _db.coupon_usage.find_one({"code": code, "user_id": {"$in": [int(user_id), str(user_id)]}}) is not None
 
 def save_coupon_usage(code: str, user_id: int):
     data = {
         "code": code,
-        "user_id": user_id,
+        "user_id": int(user_id),
         "timestamp": time.time()
     }
     _db.coupon_usage.insert_one(data)
@@ -239,7 +248,7 @@ def count_referred_users(user_id: int) -> int:
     """
     Counts the number of users referred by the given user_id.
     """
-    return _db.users.count_documents({"referred_by": user_id})
+    return _db.users.count_documents({"referred_by": {"$in": [int(user_id), str(user_id)]}})
 
 def get_payment_request_by_utr_and_status(utr: str, status: str = "pending") -> Optional[Dict[str, Any]]:
     """

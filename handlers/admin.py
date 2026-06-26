@@ -33,9 +33,6 @@ async def show_admin_panel(event, user_id: int):
     global_settings = database.get_global_settings()
     maint_text = "🔴 Disable Maintenance" if global_settings.get("maintenance_mode", False) else "🟢 Enable Maintenance"
     
-    brand_name_val = "✅ ON" if global_settings.get("branding_name_enabled", True) else "❌ OFF"
-    brand_bio_val = "✅ ON" if global_settings.get("branding_bio_enabled", True) else "❌ OFF"
-    
     text = utils.get_text("admin_title", lang)
     buttons = [
         [
@@ -51,8 +48,7 @@ async def show_admin_panel(event, user_id: int):
             utils.styled_button(utils.get_text("btn_set_imgs", lang), "admin_set_imgs", style="primary")
         ],
         [
-            utils.styled_button(f"📛 Name Branding: {brand_name_val}", "admin_toggle_brand_name", style="primary"),
-            utils.styled_button(f"📝 Bio Branding: {brand_bio_val}", "admin_toggle_brand_bio", style="primary")
+            utils.styled_button("🎨 Branding Settings", "admin_branding_settings", style="primary")
         ],
         [
             utils.styled_button("🏦 Set UPI ID", "admin_set_upi", style="primary"),
@@ -461,6 +457,22 @@ def register_handlers(client):
                 global_settings["branding_duration"] = int(val_str)
                 success = True
                 
+            # Set branding name suffix text
+            elif action == "WAITING_FOR_BRAND_NAME_TXT":
+                if val_str.lower() == "none":
+                    global_settings["branding_name_text"] = None
+                else:
+                    global_settings["branding_name_text"] = val_str
+                success = True
+                
+            # Set branding bio suffix text
+            elif action == "WAITING_FOR_BRAND_BIO_TXT":
+                if val_str.lower() == "none":
+                    global_settings["branding_bio_text"] = None
+                else:
+                    global_settings["branding_bio_text"] = val_str
+                success = True
+                
             # 6. Set Images (Start, Ping, Help)
             elif action == "WAITING_FOR_SET_IMGS":
                 parts = [p.strip() for p in val_str.split(",") if p.strip()]
@@ -666,6 +678,9 @@ def register_handlers(client):
         if success:
             database.save_global_settings(global_settings)
             await event.reply(utils.get_text("admin_updated", lang))
+            if action in ("WAITING_FOR_BRAND_NAME_TXT", "WAITING_FOR_BRAND_BIO_TXT"):
+                await show_branding_settings(event, user_id)
+                return
             
         # Return to admin panel
         await show_admin_panel(event, user_id)
@@ -774,8 +789,12 @@ def register_handlers(client):
             return
         await process_admin_usr_search(event, str(target_uid), "bal")
 
-    @client.on(events.CallbackQuery(pattern=r"^admin_toggle_brand_(name|bio)$"))
-    async def toggle_branding_elements_callback(event):
+    @client.on(events.CallbackQuery(pattern="^admin_branding_settings$"))
+    async def admin_branding_settings_callback(event):
+        await show_branding_settings(event, event.sender_id)
+
+    @client.on(events.CallbackQuery(pattern=r"^admin_tgl_brand_(name|bio)_opt$"))
+    async def admin_toggle_branding_opt_callback(event):
         element = event.pattern_match.group(1)
         user_id = event.sender_id
         if not check_admin(user_id):
@@ -786,7 +805,75 @@ def register_handlers(client):
         global_settings[key] = not global_settings.get(key, True)
         database.save_global_settings(global_settings)
         
-        await show_admin_panel(event, user_id)
+        await show_branding_settings(event, user_id)
+
+    @client.on(events.CallbackQuery(pattern=r"^admin_set_brand_(name|bio)_txt$"))
+    async def admin_set_branding_text_callback(event):
+        element = event.pattern_match.group(1)
+        user_id = event.sender_id
+        if not check_admin(user_id):
+            return
+            
+        _admin_action_states[user_id] = f"WAITING_FOR_BRAND_{element.upper()}_TXT"
+        
+        prompt_text = (
+            f"✏️ **Set {element.capitalize()} Branding Suffix**\n\n"
+            f"Send the suffix text to be appended to all userbots' {element}s (or send `none` to disable suffix):\n\n"
+            f"Example: ` via @BotUsername`"
+        )
+        buttons = [[utils.styled_button("🔙 Cancel", "admin_branding_settings", style="danger")]]
+        try:
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text, buttons=buttons)
+
+
+async def show_branding_settings(event, user_id: int):
+    user = database.get_user(user_id)
+    lang = user.get("language", "en") if user else "en"
+    
+    if not check_admin(user_id):
+        await event.respond(utils.get_text("error_not_admin", lang))
+        return
+        
+    global_settings = database.get_global_settings()
+    brand_name_val = "✅ ON" if global_settings.get("branding_name_enabled", True) else "❌ OFF"
+    brand_bio_val = "✅ ON" if global_settings.get("branding_bio_enabled", True) else "❌ OFF"
+    name_text = global_settings.get("branding_name_text") or "Not Set (Fallback:  via @BotUsername)"
+    bio_text = global_settings.get("branding_bio_text") or "Not Set (Fallback:  via @BotUsername)"
+    
+    text = (
+        "🎨 **Branding Configurations**\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"📛 **Name Branding**: {brand_name_val}\n"
+        f"Suffix: `{name_text}`\n\n"
+        f"📝 **Bio Branding**: {brand_bio_val}\n"
+        f"Suffix: `{bio_text}`\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "Configure global branding text appended to userbots."
+    )
+    
+    buttons = [
+        [
+            utils.styled_button("📛 Toggle Name Branding", "admin_tgl_brand_name_opt", style="primary"),
+            utils.styled_button("📝 Toggle Bio Branding", "admin_tgl_brand_bio_opt", style="primary")
+        ],
+        [
+            utils.styled_button("✏️ Set Name Suffix", "admin_set_brand_name_txt", style="primary"),
+            utils.styled_button("✏️ Set Bio Suffix", "admin_set_brand_bio_txt", style="primary")
+        ],
+        [
+            utils.styled_button("🔙 Back to Admin Panel", "menu_admin", style="primary")
+        ]
+    ]
+    
+    try:
+        if hasattr(event, "edit"):
+            await event.edit(text, buttons=buttons)
+        else:
+            await event.respond(text, buttons=buttons)
+    except Exception:
+        await event.respond(text, buttons=buttons)
 
 
 async def process_admin_usr_search(event, search_query: str, action: str):

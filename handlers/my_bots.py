@@ -126,137 +126,146 @@ async def show_bot_dashboard(event, phone: str, user_id: int, flash_message: Opt
     """
     Displays the detailed control dashboard for a single UserBot.
     """
-    user = database.get_user(user_id)
-    lang = user.get("language", "en") if user else "en"
-    
-    sess = database.get_session(phone)
-    if not sess or sess.get("user_id") != user_id:
-        text = "❌ Session not found."
-        if flash_message:
-            text = f"{flash_message}\n\n" + text
-        try:
-            await event.edit(text)
-        except Exception:
-            await event.respond(text)
-        return
-        
-    # Sync status dynamically with manager memory running state
-    is_running = userbot_manager.is_bot_running(phone)
-    status = "running" if is_running else "stopped"
-    
-    if sess.get("status") != status:
-        sess["status"] = status
-        database.save_session(sess)
-        
-    status_emoji = "🟢" if status == "running" else "🔴"
-    status_text = "Running" if status == "running" else "Stopped"
-    
-    name = sess.get("name") or "UserBot"
-    username = sess.get("username") or "None"
-    
-    settings = sess.get("settings", {})
-    auto_spam = "✅ ON" if settings.get("auto_spam") else "❌ OFF"
-    auto_welcome = "✅ ON" if settings.get("auto_welcome") else "❌ OFF"
-    
-    text = ""
-    if flash_message:
-        text += f"{flash_message}\n\n"
-        
-    text += utils.get_text(
-        "bot_dashboard", 
-        lang, 
-        name=name, 
-        username=username, 
-        status_emoji=status_emoji, 
-        status=status_text
-    )
-    
-    # Configure dashboard buttons
-    buttons = []
-    rows = []
-    
-    # Row 0: Start, Stop and Restart side-by-side
-    rows.append([
-        ("btn_start_bot", f"start_bot_{phone}"),
-        ("btn_stop_bot", f"stop_bot_{phone}"),
-        ("btn_restart_bot", f"restart_bot_{phone}")
-    ])
-        
-    # Row 1: Set Broadcast, Set Welcome
-    rows.append([
-        ("btn_set_broadcast", f"set_broadcast_{phone}"),
-        ("btn_set_welcome", f"set_welcome_{phone}")
-    ])
-    
-    # Row 2: Auto-Spam, Auto-Welcome
-    rows.append([
-        ("btn_toggle_spam", f"toggle_spam_{phone}", auto_spam),
-        ("btn_toggle_welcome", f"toggle_welcome_{phone}", auto_welcome)
-    ])
-    
-    # Row 3: Clone Profile (New!)
-    rows.append([
-        ("btn_clone_profile", f"clone_profile_{phone}")
-    ])
-    
-    # Row 4: Help, How to Use & Settings Info
-    rows.append([
-        ("btn_help", f"help_bot_{phone}"),
-        ("btn_how_to_use", f"how_to_use_{phone}"),
-        ("btn_settings_info", f"view_settings_info_{phone}")
-    ])
-
-    # Row 5: Change Name, Set Interval
-    rows.append([
-        ("btn_change_name", f"change_name_{phone}"),
-        ("btn_set_interval", f"set_interval_{phone}")
-    ])
-    
-    # Row 6: Refresh Stats, Delete Bot
-    rows.append([
-        ("btn_refresh_stats", f"refresh_stats_{phone}"),
-        ("btn_delete_bot", f"delete_bot_{phone}", None, "danger")
-    ])
-    
-    # Row 7: Back to Bots
-    rows.append([
-        ("btn_back_to_bots", "menu_my_bots", None, "primary")
-    ])
-
-
-    styles = ["success", "danger", "primary"]
-    for i, row in enumerate(rows):
-        row_style = styles[i % len(styles)]
-        row_buttons = []
-        for item in row:
-            key = item[0]
-            callback = item[1]
-            state = item[2] if len(item) > 2 else None
-            override_style = item[3] if len(item) > 3 else None
-            
-            if key == "btn_start_bot":
-                style = "success"
-            elif key in ("btn_stop_bot", "btn_delete_bot"):
-                style = "danger"
-            elif key == "btn_restart_bot":
-                style = "warning"
-            elif override_style:
-                style = override_style
-            else:
-                style = row_style
-                
-            if state is not None:
-                label = utils.get_text(key, lang, state=state)
-            else:
-                label = utils.get_text(key, lang)
-                
-            row_buttons.append(utils.styled_button(label, callback, style=style))
-        buttons.append(row_buttons)
-    
     try:
-        await event.edit(text, buttons=buttons)
-    except Exception:
-        await event.respond(text, buttons=buttons)
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        
+        sess = database.get_session(phone)
+        if not sess or str(sess.get("user_id")) != str(user_id):
+            text = "❌ Session not found."
+            if flash_message:
+                text = f"{flash_message}\n\n" + text
+            try:
+                await event.edit(text)
+            except Exception:
+                await event.respond(text)
+            return
+            
+        # Sync status dynamically with manager memory running state
+        is_running = userbot_manager.is_bot_running(phone)
+        status = "running" if is_running else "stopped"
+        
+        if sess.get("status") != status:
+            sess["status"] = status
+            database.save_session(sess)
+            
+        status_emoji = "🟢" if status == "running" else "🔴"
+        status_text = "Running" if status == "running" else "Stopped"
+        
+        name = sess.get("name") or "UserBot"
+        username = sess.get("username") or "None"
+        
+        settings = sess.get("settings", {})
+        auto_spam = "✅ ON" if settings.get("auto_spam") else "❌ OFF"
+        auto_welcome = "✅ ON" if settings.get("auto_welcome") else "❌ OFF"
+        
+        text = ""
+        if flash_message:
+            text += f"{flash_message}\n\n"
+            
+        text += utils.get_text(
+            "bot_dashboard", 
+            lang, 
+            name=name, 
+            username=username, 
+            status_emoji=status_emoji, 
+            status=status_text
+        )
+        
+        # Configure dashboard buttons
+        buttons = []
+        rows = []
+        
+        # Row 0: Start, Stop and Restart side-by-side
+        rows.append([
+            ("btn_start_bot", f"start_bot_{phone}"),
+            ("btn_stop_bot", f"stop_bot_{phone}"),
+            ("btn_restart_bot", f"restart_bot_{phone}")
+        ])
+            
+        # Row 1: Set Broadcast, Set Welcome
+        rows.append([
+            ("btn_set_broadcast", f"set_broadcast_{phone}"),
+            ("btn_set_welcome", f"set_welcome_{phone}")
+        ])
+        
+        # Row 2: Auto-Spam, Auto-Welcome
+        rows.append([
+            ("btn_toggle_spam", f"toggle_spam_{phone}", auto_spam),
+            ("btn_toggle_welcome", f"toggle_welcome_{phone}", auto_welcome)
+        ])
+        
+        # Row 3: Clone Profile (New!)
+        rows.append([
+            ("btn_clone_profile", f"clone_profile_{phone}")
+        ])
+        
+        # Row 4: Help, How to Use & Settings Info
+        rows.append([
+            ("btn_help", f"help_bot_{phone}"),
+            ("btn_how_to_use", f"how_to_use_{phone}"),
+            ("btn_settings_info", f"view_settings_info_{phone}")
+        ])
+
+        # Row 5: Change Name, Set Interval
+        rows.append([
+            ("btn_change_name", f"change_name_{phone}"),
+            ("btn_set_interval", f"set_interval_{phone}")
+        ])
+        
+        # Row 6: Refresh Stats, Delete Bot
+        rows.append([
+            ("btn_refresh_stats", f"refresh_stats_{phone}"),
+            ("btn_delete_bot", f"delete_bot_{phone}", None, "danger")
+        ])
+        
+        # Row 7: Back to Bots
+        rows.append([
+            ("btn_back_to_bots", "menu_my_bots", None, "primary")
+        ])
+
+
+        styles = ["success", "danger", "primary"]
+        for i, row in enumerate(rows):
+            row_style = styles[i % len(styles)]
+            row_buttons = []
+            for item in row:
+                key = item[0]
+                callback = item[1]
+                state = item[2] if len(item) > 2 else None
+                override_style = item[3] if len(item) > 3 else None
+                
+                if key == "btn_start_bot":
+                    style = "success"
+                elif key in ("btn_stop_bot", "btn_delete_bot"):
+                    style = "danger"
+                elif key == "btn_restart_bot":
+                    style = "warning"
+                elif override_style:
+                    style = override_style
+                else:
+                    style = row_style
+                    
+                if state is not None:
+                    label = utils.get_text(key, lang, state=state)
+                else:
+                    label = utils.get_text(key, lang)
+                    
+                row_buttons.append(utils.styled_button(label, callback, style=style))
+            buttons.append(row_buttons)
+        
+        try:
+            await event.edit(text, buttons=buttons)
+        except Exception:
+            await event.respond(text, buttons=buttons)
+            
+    except Exception as e:
+        logger.exception("Error rendering bot dashboard")
+        err_msg = f"❌ **Error rendering dashboard:** {e}"
+        try:
+            await event.edit(err_msg)
+        except Exception:
+            await event.respond(err_msg)
 
 def register_handlers(client):
     
@@ -342,18 +351,64 @@ def register_handlers(client):
             await event.answer("⚠️ Userbot must be running to clone a profile.", alert=True)
             return
             
-        _bot_action_states[user_id] = {
-            "phone": phone,
-            "action": "WAITING_FOR_CLONE_TARGET"
-        }
-        
-        prompt_text = "👤 **Clone Profile**\n\nEnter the username (e.g. `@username` or `username`) or User ID of the profile you want to clone:"
+        text = (
+            "👤 **Profile Cloning Options**\n\n"
+            "Choose which aspect of the target profile you would like to clone to your Userbot:"
+        )
         
         sess = database.get_session(phone)
-        buttons = []
+        buttons = [
+            [
+                utils.styled_button("👤 Complete Profile Clone", f"clone_opt_complete_{phone}", style="success")
+            ],
+            [
+                utils.styled_button("✏️ Clone Name Only", f"clone_opt_name_{phone}", style="primary"),
+                utils.styled_button("📝 Clone Bio Only", f"clone_opt_bio_{phone}", style="primary")
+            ],
+            [
+                utils.styled_button("🖼️ Clone Photo Only", f"clone_opt_photo_{phone}", style="primary")
+            ]
+        ]
+        
         if sess and "original_first_name" in sess:
             buttons.append([utils.styled_button("🔄 Return to Original Profile", f"restore_profile_{phone}", style="success")])
-        buttons.append([utils.styled_button("🔙 Cancel", f"select_bot_{phone}", style="danger")])
+            
+        buttons.append([utils.styled_button("🔙 Back", f"select_bot_{phone}", style="danger")])
+        
+        try:
+            await event.edit(text, buttons=buttons)
+        except Exception:
+            await event.respond(text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern=r"^clone_opt_(complete|name|bio|photo)_(.+)$"))
+    async def clone_opt_callback(event):
+        clone_type = event.pattern_match.group(1)
+        phone = event.pattern_match.group(2)
+        user_id = event.sender_id
+        
+        if not userbot_manager.is_bot_running(phone):
+            await event.answer("⚠️ Userbot must be running to clone a profile.", alert=True)
+            return
+            
+        _bot_action_states[user_id] = {
+            "phone": phone,
+            "action": "WAITING_FOR_CLONE_TARGET",
+            "clone_type": clone_type
+        }
+        
+        type_display = {
+            "complete": "Complete Profile",
+            "name": "Name Only",
+            "bio": "Bio Only",
+            "photo": "Photo Only"
+        }.get(clone_type, "Complete Profile")
+        
+        prompt_text = (
+            f"👤 **Clone Profile ({type_display})**\n\n"
+            f"Enter the username (e.g. `@username` or `username`) or User ID of the target profile you want to clone:"
+        )
+        
+        buttons = [[utils.styled_button("🔙 Cancel", f"clone_profile_{phone}", style="danger")]]
         
         try:
             await event.edit(prompt_text, buttons=buttons)
@@ -436,7 +491,7 @@ def register_handlers(client):
         user_id = event.sender_id
         
         sess = database.get_session(phone)
-        if not sess or sess.get("user_id") != user_id:
+        if not sess or str(sess.get("user_id")) != str(user_id):
             await event.answer("❌ Session error.", alert=True)
             return
             
@@ -492,7 +547,7 @@ def register_handlers(client):
         
         sess = database.get_session(phone)
         flash = None
-        if sess and sess.get("user_id") == user_id:
+        if sess and str(sess.get("user_id")) == str(user_id):
             settings = sess.setdefault("settings", {})
             
             key_map = {
@@ -518,7 +573,7 @@ def register_handlers(client):
         
         sess = database.get_session(phone)
         flash = None
-        if sess and sess.get("user_id") == user_id:
+        if sess and str(sess.get("user_id")) == str(user_id):
             if userbot_manager.is_bot_running(phone):
                 bot_obj = userbot_manager._running_bots[phone]
                 try:
@@ -600,7 +655,7 @@ def register_handlers(client):
         
         sess = database.get_session(phone)
         flash = None
-        if sess and sess.get("user_id") == user_id:
+        if sess and str(sess.get("user_id")) == str(user_id):
             sess["settings"]["broadcast_interval"] = val
             database.save_session(sess)
             userbot_manager.reload_bot_settings(phone)
@@ -649,7 +704,7 @@ def register_handlers(client):
         lang = user.get("language", "en") if user else "en"
         
         sess = database.get_session(phone)
-        if not sess or sess.get("user_id") != user_id:
+        if not sess or str(sess.get("user_id")) != str(user_id):
             await event.reply("❌ Session error.")
             return
             
@@ -674,8 +729,9 @@ def register_handlers(client):
                 await event.reply("❌ Target cannot be empty. Please enter a valid username/ID.")
                 return
                 
+            clone_type = state.get("clone_type", "complete")
             progress_msg = await event.reply("⏳ **Cloning profile details, please wait...**")
-            success, msg = await userbot_manager.clone_profile(phone, target)
+            success, msg = await userbot_manager.clone_profile(phone, target, clone_type=clone_type)
             await progress_msg.delete()
             
             if success:

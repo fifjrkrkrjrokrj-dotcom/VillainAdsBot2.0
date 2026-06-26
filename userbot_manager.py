@@ -97,10 +97,10 @@ async def stop_all_bots():
         await stop_userbot(s_id)
     logger.info("All userbots stopped.")
 
-async def clone_profile(session_id: str, target: str) -> tuple:
+async def clone_profile(session_id: str, target: str, clone_type: str = "complete") -> tuple:
     """
     Clones target profile (first_name, last_name, about/bio, and profile photo) 
-    to the userbot instance associated with session_id.
+    to the userbot instance associated with session_id based on clone_type.
     """
     if session_id not in _running_bots or not _running_bots[session_id].is_running:
         return False, "Userbot is not running. Please start it first."
@@ -152,22 +152,27 @@ async def clone_profile(session_id: str, target: str) -> tuple:
         user = full_user.users[0]
         bio = full_user.full_user.about or ""
             
-        # Download target's profile photo
+        # Download target's profile photo if cloning complete or photo only
         photo_path = None
-        try:
-            photo_path = await client.download_profile_photo(entity, file=f"user_data/temp_clone_{session_id}.jpg")
-        except Exception as e:
-            logger.warning(f"Failed to download profile photo: {e}")
+        if clone_type in ("photo", "complete"):
+            try:
+                photo_path = await client.download_profile_photo(entity, file=f"user_data/temp_clone_{session_id}.jpg")
+            except Exception as e:
+                logger.warning(f"Failed to download profile photo: {e}")
             
-        # Update name and bio
+        # Update name and bio based on clone_type
         first_name = user.first_name or ""
         last_name = user.last_name or ""
         
-        await client(UpdateProfileRequest(
-            first_name=first_name,
-            last_name=last_name,
-            about=bio
-        ))
+        update_args = {}
+        if clone_type in ("name", "complete"):
+            update_args["first_name"] = first_name
+            update_args["last_name"] = last_name
+        if clone_type in ("bio", "complete"):
+            update_args["about"] = bio
+            
+        if update_args:
+            await client(UpdateProfileRequest(**update_args))
         
         # Update profile photo if downloaded
         if photo_path and os.path.exists(photo_path):
@@ -182,13 +187,14 @@ async def clone_profile(session_id: str, target: str) -> tuple:
                 except Exception:
                     pass
                     
-        # Update session info in database
-        sess_data = database.get_session(session_id)
-        if sess_data:
-            sess_data["name"] = f"{first_name} {last_name}".strip()
-            database.save_session(sess_data)
+        # Update session info in database if name was changed
+        if clone_type in ("name", "complete"):
+            sess_data = database.get_session(session_id)
+            if sess_data:
+                sess_data["name"] = f"{first_name} {last_name}".strip()
+                database.save_session(sess_data)
             
-        return True, f"Successfully cloned profile of {first_name} (@{user.username or 'None'})!"
+        return True, f"Successfully cloned profile ({clone_type}) of {first_name} (@{user.username or 'None'})!"
     except Exception as e:
         logger.error(f"Error cloning profile: {e}")
         return False, f"Error: {e}"

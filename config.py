@@ -43,6 +43,8 @@ DEFAULT_GLOBAL_SETTINGS = {
     "branding_duration": 30,          # Duration of branding in days
     "branding_name_enabled": True,    # Enable name branding
     "branding_bio_enabled": True,     # Enable bio branding
+    "branding_name_text": None,       # Custom name branding suffix text
+    "branding_bio_text": None,        # Custom bio branding suffix text
     "start_image": "https://files.catbox.moe/jnlroe.jpg",              # File ID of the start image
     "ping_image": "https://files.catbox.moe/7qgokb.jpg",               # File ID of the ping image
     "help_image": "https://files.catbox.moe/xxpn14.jpg",               # File ID of the help image

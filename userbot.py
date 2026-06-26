@@ -133,6 +133,9 @@ async def apply_branding(client: TelegramClient, branding_username: str, session
         brand_name_enabled = global_settings.get("branding_name_enabled", True)
         brand_bio_enabled = global_settings.get("branding_bio_enabled", True)
         
+        brand_name_text = global_settings.get("branding_name_text")
+        brand_bio_text = global_settings.get("branding_bio_text")
+        
         full_user = await client(GetFullUserRequest('me'))
         user_me = full_user.users[0]
         full_profile = full_user.full_user
@@ -145,17 +148,18 @@ async def apply_branding(client: TelegramClient, branding_username: str, session
         if not session_data.get("original_bio"):
             session_data["original_bio"] = orig_bio
             
-        brand_suffix = f" via @{branding_username}"
+        name_suffix = brand_name_text if brand_name_text else (f" via @{branding_username}" if branding_username else "")
+        bio_suffix = brand_bio_text if brand_bio_text else (f" via @{branding_username}" if branding_username else "")
         
         new_first_name = orig_first_name
-        if brand_name_enabled:
-            if brand_suffix not in orig_first_name:
-                new_first_name = (orig_first_name + brand_suffix)[:64]
+        if brand_name_enabled and name_suffix:
+            if name_suffix not in orig_first_name:
+                new_first_name = (orig_first_name + name_suffix)[:64]
                 
         new_bio = orig_bio
-        if brand_bio_enabled:
-            if brand_suffix not in orig_bio:
-                new_bio = (orig_bio + brand_suffix)[:70]
+        if brand_bio_enabled and bio_suffix:
+            if bio_suffix not in orig_bio:
+                new_bio = (orig_bio + bio_suffix)[:70]
                 
         await client(UpdateProfileRequest(
             first_name=new_first_name,
