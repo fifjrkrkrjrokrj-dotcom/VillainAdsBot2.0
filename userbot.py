@@ -13,6 +13,48 @@ import database
 
 logger = logging.getLogger(__name__)
 
+# --- Pytgcalls Telethon Update AttributeError Monkey-Patch ---
+try:
+    from pytgcalls.mtproto.telethon_client import TelethonClient
+    from telethon.events import Raw
+    
+    original_init = TelethonClient.__init__
+    
+    def patched_init(self, cache_duration, client):
+        original_add = client.add_event_handler
+        
+        def patched_add(callback, event=None):
+            if isinstance(event, Raw) or (event and event.__class__.__name__ == 'Raw'):
+                original_callback = callback
+                async def wrapped_callback(evt):
+                    try:
+                        await original_callback(evt)
+                    except (AttributeError, ValueError) as err:
+                        err_str = str(err)
+                        if "UpdateGroupCall" in err_str or "chat_id" in err_str:
+                            pass
+                        else:
+                            raise err
+                    except Exception as e:
+                        err_str = str(e)
+                        if "UpdateGroupCall" in err_str or "chat_id" in err_str:
+                            pass
+                        else:
+                            raise e
+                callback = wrapped_callback
+            return original_add(callback, event)
+            
+        client.add_event_handler = patched_add
+        try:
+            original_init(self, cache_duration, client)
+        finally:
+            client.add_event_handler = original_add
+            
+    TelethonClient.__init__ = patched_init
+    logger.info("Successfully applied PyTgCalls TelethonClient monkey-patch.")
+except Exception as patch_err:
+    logger.error(f"Failed to apply PyTgCalls monkey-patch: {patch_err}")
+
 import aiohttp
 from pytgcalls import PyTgCalls
 from pytgcalls.types import AudioPiped
