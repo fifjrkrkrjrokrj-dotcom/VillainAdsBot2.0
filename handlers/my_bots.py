@@ -7,6 +7,7 @@ import models
 import utils
 import config
 import userbot_manager
+from userbot import join_vc_by_link
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +89,11 @@ async def show_bots_list(event, user_id: int, flash_message: Optional[str] = Non
         text += f"{flash_message}\n\n"
         
     text += "📱 **Your Connected UserBots**:\n\n"
-    buttons = []
+    buttons = [
+        [
+            utils.styled_button(utils.get_text("btn_all_slots", lang), "menu_all_slots", style="success")
+        ]
+    ]
     
     for s in sessions:
         phone = s.get("phone")
@@ -189,6 +194,11 @@ async def show_bot_dashboard(event, phone: str, user_id: int, flash_message: Opt
             ("btn_set_welcome", f"set_welcome_{phone}")
         ])
         
+        # Row 1.5: Voice Chat (VC) Menu
+        rows.append([
+            ("btn_vc_menu", f"vc_menu_{phone}")
+        ])
+        
         # Row 2: Auto-Spam, Auto-Welcome
         rows.append([
             ("btn_toggle_spam", f"toggle_spam_{phone}", auto_spam),
@@ -267,9 +277,739 @@ async def show_bot_dashboard(event, phone: str, user_id: int, flash_message: Opt
         except Exception:
             await event.respond(err_msg)
 
+async def show_all_slots_dashboard(event, user_id: int, flash_message: Optional[str] = None):
+    """
+    Renders the dashboard for controlling all userbots at once.
+    """
+    user = database.get_user(user_id)
+    lang = user.get("language", "en") if user else "en"
+    
+    sessions = database.get_sessions(user_id)
+    if not sessions:
+        text = "⚠️ **All Slots Dashboard**\n\nNo connected UserBots found. Please login at least one account first!"
+        buttons = [[utils.styled_button(utils.get_text("back_to_menu", lang), "menu_start", style="primary")]]
+        try:
+            if hasattr(event, "edit"):
+                await event.edit(text, buttons=buttons)
+            else:
+                await event.respond(text, buttons=buttons)
+        except Exception:
+            await event.respond(text, buttons=buttons)
+        return
+        
+    total_slots = len(sessions)
+    running_bots = sum(1 for s in sessions if userbot_manager.is_bot_running(s["phone"]))
+    stopped_bots = total_slots - running_bots
+    
+    any_spam_on = any(s.get("settings", {}).get("auto_spam", False) for s in sessions)
+    any_welcome_on = any(s.get("settings", {}).get("auto_welcome", False) for s in sessions)
+    
+    spam_state_display = "🟢 ON" if any_spam_on else "🔴 OFF"
+    welcome_state_display = "🟢 ON" if any_welcome_on else "🔴 OFF"
+    
+    text = ""
+    if flash_message:
+        text += f"{flash_message}\n\n"
+        
+    text += (
+        f"👥 **All Slots Control Dashboard**\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"📊 **Overview**:\n"
+        f"• Total Linked Bots: **{total_slots}**\n"
+        f"• Running: **🟢 {running_bots}** | Stopped: **🔴 {stopped_bots}**\n"
+        f"• Auto-Spam (All): **{spam_state_display}**\n"
+        f"• Auto-Welcome (All): **{welcome_state_display}**\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"⚡ _Control all your UserBots simultaneously from this panel._"
+    )
+    
+    buttons = [
+        # Row 0: Start All, Stop All, Restart All
+        [
+            utils.styled_button("🟢 Start All", "all_slots_start", style="success"),
+            utils.styled_button("🔴 Stop All", "all_slots_stop", style="danger"),
+            utils.styled_button("🔄 Restart All", "all_slots_restart", style="primary")
+        ],
+        # Row 1: Set All Broadcast, Set All Welcome
+        [
+            utils.styled_button("✉️ Set All Broadcast", "all_slots_set_broadcast", style="primary"),
+            utils.styled_button("👋 Set All Welcome", "all_slots_set_welcome", style="primary")
+        ],
+        # Row 1.5: Voice Chat (VC) Menu (All)
+        [
+            utils.styled_button("🎙️ Voice Chat Menu (All)", "all_slots_vc_menu", style="success")
+        ],
+        # Row 2: Auto-Spam (All), Auto-Welcome (All)
+        [
+            utils.styled_button(f"🔄 Auto-Spam (All): {spam_state_display}", "all_slots_toggle_spam", style="primary"),
+            utils.styled_button(f"👋 Auto-Welcome (All): {welcome_state_display}", "all_slots_toggle_welcome", style="primary")
+        ],
+        # Row 3: Clone Profile (All)
+        [
+            utils.styled_button("👤 Clone Profile (All)", "all_slots_clone_profile", style="primary")
+        ],
+        # Row 4: Help, How to Use
+        [
+            utils.styled_button(utils.get_text("btn_help", lang), "all_slots_help", style="primary"),
+            utils.styled_button(utils.get_text("btn_how_to_use", lang), "all_slots_how_to_use", style="primary")
+        ],
+        # Row 5: Change Name (All), Set Interval (All)
+        [
+            utils.styled_button("✏️ Change Name (All)", "all_slots_change_name", style="primary"),
+            utils.styled_button("⏱️ Set Interval (All)", "all_slots_set_interval", style="primary")
+        ],
+        # Row 6: Refresh Stats (All), Delete All Bots
+        [
+            utils.styled_button("🔄 Refresh Stats (All)", "all_slots_refresh_stats", style="primary"),
+            utils.styled_button("🗑️ Delete All Bots", "all_slots_delete", style="danger")
+        ],
+        # Row 7: Back to Bots
+        [
+            utils.styled_button(utils.get_text("btn_back_to_bots", lang), "menu_my_bots", style="danger")
+        ]
+    ]
+    
+    try:
+        if hasattr(event, "edit"):
+            await event.edit(text, buttons=buttons)
+        else:
+            await event.respond(text, buttons=buttons)
+    except Exception:
+        await event.respond(text, buttons=buttons)
+
+
 def register_handlers(client):
     
     # ------------------ New Features / Handlers ------------------
+    @client.on(events.CallbackQuery(pattern="^menu_all_slots$"))
+    async def menu_all_slots_callback(event):
+        await show_all_slots_dashboard(event, event.sender_id)
+
+    @client.on(events.CallbackQuery(pattern=r"^vc_menu_(.+)$"))
+    async def vc_menu_callback(event):
+        phone = event.pattern_match.group(1).strip()
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        
+        bot_obj = userbot_manager._running_bots.get(phone)
+        if not bot_obj:
+            await event.answer("⚠️ Userbot is not running.", alert=True)
+            return
+            
+        vc_chat_id = getattr(bot_obj, "current_vc_chat_id", None)
+        vc_status = "✅ Connected" if vc_chat_id else "❌ Disconnected"
+        
+        text = (
+            f"🎙️ **Voice Chat Settings Menu**\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"> **Current Status**: **{vc_status}**\n\n"
+            f"ℹ️ **How to use**:\n"
+            f"1. First, click **Join VC** and send your Group/Channel link or username to connect your Userbot.\n"
+            f"2. Once connected, you can play music/video using the **Play Song** button or slash commands:\n"
+            f"   • `/play <song name>`: Stream audio in VC.\n"
+            f"   • `/vplay <song name>`: Stream video call in VC.\n"
+            f"3. Click **Leave VC** to disconnect the Userbot from the call.\n\n"
+            f"⚠️ *Note: Make sure your Userbot is already in the VC before trying to stream audio/video!*"
+        )
+        
+        buttons = [
+            [
+                utils.styled_button(utils.get_text("btn_vc_join", lang), f"vc_join_{phone}", style="primary"),
+                utils.styled_button(utils.get_text("btn_vc_leave", lang), f"vc_leave_{phone}", style="danger")
+            ],
+            [
+                utils.styled_button("🎵 Play Song", f"play_song_{phone}", style="success")
+            ],
+            [
+                utils.styled_button("🔙 Back to Dashboard", f"select_bot_{phone}", style="primary")
+            ]
+        ]
+        try:
+            await event.edit(text, buttons=buttons)
+        except Exception:
+            await event.respond(text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_vc_menu$"))
+    async def all_slots_vc_menu_callback(event):
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        
+        sessions = database.get_sessions(user_id)
+        running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
+        if not running_phones:
+            await event.answer("⚠️ Please start at least one userbot first!", alert=True)
+            return
+            
+        vc_connected_count = sum(
+            1 for p in running_phones
+            if getattr(userbot_manager._running_bots.get(p), "current_vc_chat_id", None)
+        )
+        
+        text = (
+            f"🎙️ **Bulk Voice Chat Settings Menu**\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"> **VC Connected Bots**: **{vc_connected_count} / {len(running_phones)}**\n\n"
+            f"ℹ️ **How to use (Bulk)**:\n"
+            f"1. Click **Join VC (All)** and send a Group/Channel link to connect all active userbots to the Voice Chat.\n"
+            f"2. Use the **Play Song (All)** button or slash commands `/play` / `/vplay` to stream media on all connected userbots simultaneously.\n"
+            f"3. Click **Leave VC (All)** to disconnect all userbots from their calls at once.\n\n"
+            f"⚠️ *Note: Make sure your Userbots are already in the VC before trying to stream audio/video!*"
+        )
+        
+        buttons = [
+            [
+                utils.styled_button(utils.get_text("btn_vc_join", lang) + " (All)", "all_slots_vc_join", style="primary"),
+                utils.styled_button(utils.get_text("btn_vc_leave", lang) + " (All)", "all_slots_vc_leave", style="danger")
+            ],
+            [
+                utils.styled_button("🎵 Play Song (All)", "all_slots_play_song", style="success")
+            ],
+            [
+                utils.styled_button("🔙 Back", "menu_all_slots", style="primary")
+            ]
+        ]
+        try:
+            await event.edit(text, buttons=buttons)
+        except Exception:
+            await event.respond(text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern=r"^vc_leave_(.+)$"))
+    async def vc_leave_callback(event):
+        phone = event.pattern_match.group(1).strip()
+        user_id = event.sender_id
+        bot_obj = userbot_manager._running_bots.get(phone)
+        if not bot_obj:
+            await event.answer("⚠️ Userbot is not running.", alert=True)
+            return
+            
+        progress_msg = await event.reply("⏳ **Leaving Voice Chat...**")
+        success, msg = await bot_obj.leave_voice_chat()
+        await progress_msg.delete()
+        
+        from .my_bots import show_bot_dashboard
+        await show_bot_dashboard(event, phone, user_id, flash_message=msg)
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_vc_leave$"))
+    async def all_slots_vc_leave_callback(event):
+        user_id = event.sender_id
+        sessions = database.get_sessions(user_id)
+        running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
+        if not running_phones:
+            await event.answer("⚠️ Please start at least one userbot first!", alert=True)
+            return
+            
+        progress_msg = await event.reply("⏳ **Leaving Voice Chats on all running userbots...**")
+        success_count = 0
+        for phone in running_phones:
+            bot_obj = userbot_manager._running_bots[phone]
+            success, msg = await bot_obj.leave_voice_chat()
+            if success:
+                success_count += 1
+        await progress_msg.delete()
+        await show_all_slots_dashboard(event, user_id, flash_message=f"🔴 **Left VC on {success_count}/{len(running_phones)} userbots!**")
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_restart$"))
+    async def all_slots_restart_callback(event):
+        user_id = event.sender_id
+        sessions = database.get_sessions(user_id)
+        if not sessions:
+            await event.answer("⚠️ No slots found.", alert=True)
+            return
+            
+        progress_msg = await event.reply("⏳ **Restarting all userbots, please wait...**")
+        restarted = 0
+        for s in sessions:
+            phone = s["phone"]
+            await userbot_manager.stop_userbot(phone)
+            if await userbot_manager.start_userbot(phone):
+                restarted += 1
+            await asyncio.sleep(1.0)
+        await progress_msg.delete()
+        await show_all_slots_dashboard(event, user_id, flash_message=f"🔄 **Restarted {restarted} userbots!**")
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_clone_profile$"))
+    async def all_slots_clone_profile_callback(event):
+        user_id = event.sender_id
+        sessions = database.get_sessions(user_id)
+        running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
+        if not running_phones:
+            await event.answer("⚠️ Please start at least one userbot first!", alert=True)
+            return
+            
+        text = (
+            "👥 **Bulk Profile Cloning Options**\n\n"
+            "Choose which aspect of the target profile you would like to clone to ALL your running Userbots:"
+        )
+        
+        buttons = [
+            [
+                utils.styled_button("👥 Complete Profile Clone", "all_slots_clone_opt_complete", style="success")
+            ],
+            [
+                utils.styled_button("✏️ Clone Name Only", "all_slots_clone_opt_name", style="primary"),
+                utils.styled_button("📝 Clone Bio Only", "all_slots_clone_opt_bio", style="primary")
+            ],
+            [
+                utils.styled_button("🖼️ Clone Photo Only", "all_slots_clone_opt_photo", style="primary")
+            ],
+            [utils.styled_button("🔙 Cancel", "menu_all_slots", style="danger")]
+        ]
+        try:
+            await event.edit(text, buttons=buttons)
+        except Exception:
+            await event.respond(text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern=r"^all_slots_clone_opt_(complete|name|bio|photo)$"))
+    async def all_slots_clone_opt_callback(event):
+        clone_type = event.pattern_match.group(1)
+        user_id = event.sender_id
+        
+        _bot_action_states[user_id] = {
+            "action": "WAITING_FOR_ALL_CLONE_TARGET",
+            "clone_type": clone_type
+        }
+        
+        type_display = {
+            "complete": "Complete Profile",
+            "name": "Name Only",
+            "bio": "Bio Only",
+            "photo": "Photo Only"
+        }.get(clone_type, "Complete Profile")
+        
+        prompt_text = (
+            f"👥 **Bulk Clone Profile ({type_display})**\n\n"
+            f"Enter the username (e.g. `@username`) or User ID of the target profile you want to clone for ALL userbots:"
+        )
+        buttons = [[utils.styled_button("🔙 Cancel", "all_slots_clone_profile", style="danger")]]
+        try:
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_help$"))
+    async def all_slots_help_callback(event):
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        text = utils.get_text("help_dashboard_text", lang)
+        buttons = [[utils.styled_button("🔙 Back", "menu_all_slots", style="primary")]]
+        global_settings = database.get_global_settings()
+        help_image = global_settings.get("help_image")
+        try:
+             if help_image:
+                 await event.respond(text, file=help_image, buttons=buttons)
+             else:
+                 await event.edit(text, buttons=buttons)
+        except Exception:
+             await event.respond(text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_how_to_use$"))
+    async def all_slots_how_to_use_callback(event):
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        text = utils.get_text("how_to_use_text", lang)
+        buttons = [[utils.styled_button("🔙 Back", "menu_all_slots", style="primary")]]
+        try:
+            await event.edit(text, buttons=buttons)
+        except Exception:
+            await event.respond(text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_change_name$"))
+    async def all_slots_change_name_callback(event):
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        _bot_action_states[user_id] = {
+            "action": "WAITING_FOR_ALL_NAME"
+        }
+        prompt_text = utils.get_text("prompt_name", lang)
+        buttons = [[utils.styled_button("🔙 Cancel", "menu_all_slots", style="primary")]]
+        try:
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_set_interval$"))
+    async def all_slots_set_interval_callback(event):
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        
+        text = (
+            f"⏱️ **Bulk Timing Settings**\n\n"
+            f"Configure timing settings for ALL slots simultaneously:\n\n"
+            f"• **Group-to-Group Delay**: Delay between messages to different groups.\n"
+            f"• **Loop Repeat Interval**: Delay between repeating the broadcast loop.\n\n"
+            f"__Choose an option to modify:__"
+        )
+        buttons = [
+            [
+                utils.styled_button("⏱️ Set Group Delay (All)", "all_slots_set_delay", style="primary"),
+                utils.styled_button("🔄 Set Loop Interval (All)", "all_slots_set_loop_interval", style="primary")
+            ],
+            [
+                utils.styled_button("🔙 Back", "menu_all_slots", style="danger")
+            ]
+        ]
+        try:
+            await event.edit(text, buttons=buttons)
+        except Exception:
+            await event.respond(text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_set_loop_interval$"))
+    async def all_slots_set_loop_interval_callback(event):
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        text = utils.get_text("interval_title", lang)
+        buttons = [
+            [
+                utils.styled_button(utils.get_text("btn_int_val", lang, val=300), "all_slots_int_val_300", style="primary"),
+                utils.styled_button(utils.get_text("btn_int_val", lang, val=500), "all_slots_int_val_500", style="primary"),
+                utils.styled_button(utils.get_text("btn_int_val", lang, val=600), "all_slots_int_val_600", style="primary")
+            ],
+            [
+                utils.styled_button(utils.get_text("btn_int_custom", lang), "all_slots_int_custom", style="primary"),
+                utils.styled_button("🔙 Back", "all_slots_set_interval", style="primary")
+            ]
+        ]
+        try:
+            await event.edit(text, buttons=buttons)
+        except Exception:
+            await event.respond(text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern=r"^all_slots_int_val_(\d+)$"))
+    async def all_slots_int_val_callback(event):
+        val = int(event.pattern_match.group(1))
+        user_id = event.sender_id
+        sessions = database.get_sessions(user_id)
+        for s in sessions:
+            s.setdefault("settings", {})["broadcast_interval"] = val
+            database.save_session(s)
+            userbot_manager.reload_bot_settings(s["phone"])
+        await show_all_slots_dashboard(event, user_id, flash_message=f"⏱️ **Interval updated to {val}s for all bots!**")
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_int_custom$"))
+    async def all_slots_int_custom_callback(event):
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        _bot_action_states[user_id] = {
+            "action": "WAITING_FOR_ALL_CUSTOM_INTERVAL"
+        }
+        prompt_text = utils.get_text("prompt_custom_interval", lang)
+        buttons = [[utils.styled_button("🔙 Cancel", "all_slots_set_loop_interval", style="primary")]]
+        try:
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_set_delay$"))
+    async def all_slots_set_delay_callback(event):
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        text = utils.get_text("inter_delay_title", lang)
+        
+        buttons = [
+            [
+                utils.styled_button(utils.get_text("btn_int_val", lang, val=5), "all_slots_del_val_5", style="primary"),
+                utils.styled_button(utils.get_text("btn_int_val", lang, val=7), "all_slots_del_val_7", style="primary"),
+                utils.styled_button(utils.get_text("btn_int_val", lang, val=10), "all_slots_del_val_10", style="primary")
+            ],
+            [
+                utils.styled_button(utils.get_text("btn_del_custom", lang), "all_slots_del_custom", style="primary"),
+                utils.styled_button("🔙 Back", "all_slots_set_interval", style="primary")
+            ]
+        ]
+        try:
+            await event.edit(text, buttons=buttons)
+        except Exception:
+            await event.respond(text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern=r"^all_slots_del_val_(\d+)$"))
+    async def all_slots_del_val_callback(event):
+        val = int(event.pattern_match.group(1))
+        user_id = event.sender_id
+        sessions = database.get_sessions(user_id)
+        for s in sessions:
+            s.setdefault("settings", {})["inter_group_delay"] = val
+            database.save_session(s)
+            userbot_manager.reload_bot_settings(s["phone"])
+        await show_all_slots_dashboard(event, user_id, flash_message=f"⏱️ **Inter-Group Delay updated to {val}s for all bots!**")
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_del_custom$"))
+    async def all_slots_del_custom_callback(event):
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        _bot_action_states[user_id] = {
+            "action": "WAITING_FOR_ALL_CUSTOM_DELAY"
+        }
+        prompt_text = utils.get_text("prompt_custom_inter_delay", lang)
+        buttons = [[utils.styled_button("🔙 Cancel", "all_slots_set_delay", style="primary")]]
+        try:
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_refresh_stats$"))
+    async def all_slots_refresh_stats_callback(event):
+        user_id = event.sender_id
+        sessions = database.get_sessions(user_id)
+        running_bots = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
+        if not running_bots:
+            await event.answer("⚠️ Start at least one userbot first!", alert=True)
+            return
+            
+        progress_msg = await event.reply("⏳ **Refreshing statistics for all running userbots...**")
+        refreshed = 0
+        for phone in running_bots:
+            bot_obj = userbot_manager._running_bots[phone]
+            try:
+                await bot_obj.get_groups(force_refresh=True)
+                refreshed += 1
+            except Exception:
+                pass
+        await progress_msg.delete()
+        await show_all_slots_dashboard(event, user_id, flash_message=f"🔄 **Refreshed stats for {refreshed} userbots!**")
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_delete$"))
+    async def all_slots_delete_callback(event):
+        user_id = event.sender_id
+        text = (
+            "⚠️ **Delete All UserBots**\n\n"
+            "Are you absolutely sure you want to delete **ALL** connected userbots? "
+            "This will delete all Telegram sessions from disk and database. This action cannot be undone!"
+        )
+        buttons = [
+            [utils.styled_button("🗑️ Yes, Delete All", "all_slots_delete_confirm", style="danger")],
+            [utils.styled_button("❌ Cancel", "menu_all_slots", style="primary")]
+        ]
+        try:
+            await event.edit(text, buttons=buttons)
+        except Exception:
+            await event.respond(text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_delete_confirm$"))
+    async def all_slots_delete_confirm_callback(event):
+        user_id = event.sender_id
+        sessions = database.get_sessions(user_id)
+        deleted = 0
+        for s in sessions:
+            await userbot_manager.remove_userbot(s["phone"])
+            deleted += 1
+        from .my_bots import show_bots_list
+        await show_bots_list(event, user_id, flash_message=f"🗑️ **Deleted {deleted} userbot sessions successfully.**")
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_start$"))
+    async def all_slots_start_callback(event):
+        user_id = event.sender_id
+        sessions = database.get_sessions(user_id)
+        if not sessions:
+            await event.answer("⚠️ No slots found.", alert=True)
+            return
+            
+        progress_msg = await event.reply("⏳ **Starting all userbots, please wait...**")
+        started = 0
+        for s in sessions:
+            phone = s["phone"]
+            if not userbot_manager.is_bot_running(phone):
+                if await userbot_manager.start_userbot(phone):
+                    started += 1
+                await asyncio.sleep(1.0)
+        await progress_msg.delete()
+        await show_all_slots_dashboard(event, user_id, flash_message=f"🟢 **Started {started} userbots!**")
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_stop$"))
+    async def all_slots_stop_callback(event):
+        user_id = event.sender_id
+        sessions = database.get_sessions(user_id)
+        if not sessions:
+            await event.answer("⚠️ No slots found.", alert=True)
+            return
+            
+        progress_msg = await event.reply("⏳ **Stopping all userbots, please wait...**")
+        stopped = 0
+        for s in sessions:
+            phone = s["phone"]
+            if userbot_manager.is_bot_running(phone):
+                await userbot_manager.stop_userbot(phone)
+                stopped += 1
+        await progress_msg.delete()
+        await show_all_slots_dashboard(event, user_id, flash_message=f"🔴 **Stopped {stopped} userbots!**")
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_vc_join$"))
+    async def all_slots_vc_join_callback(event):
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        
+        sessions = database.get_sessions(user_id)
+        running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
+        if not running_phones:
+            await event.answer("⚠️ Please start at least one userbot first!", alert=True)
+            return
+            
+        _bot_action_states[user_id] = {
+            "action": "WAITING_FOR_ALL_VC_LINK"
+        }
+        
+        prompt_text = utils.get_text("prompt_all_vc_link", lang)
+        buttons = [[utils.styled_button("🔙 Cancel", "menu_all_slots", style="primary")]]
+        try:
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_set_broadcast$"))
+    async def all_slots_set_broadcast_callback(event):
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        
+        text = (
+            f"✉️ **Bulk Broadcast Settings**\n\n"
+            f"Configure broadcasting settings for ALL userbots simultaneously:\n"
+        )
+        buttons = [
+            [
+                utils.styled_button("✉️ Set Single Message (All)", "all_slots_set_single_msg", style="primary"),
+                utils.styled_button("📚 Set Multiple Messages (All)", "all_slots_set_multi_msg", style="primary")
+            ],
+            [
+                utils.styled_button("🔄 Toggle Broadcast Mode (All)", "all_slots_toggle_broadcast_mode", style="primary")
+            ],
+            [
+                utils.styled_button("🔙 Back", "menu_all_slots", style="danger")
+            ]
+        ]
+        try:
+            await event.edit(text, buttons=buttons)
+        except Exception:
+            await event.respond(text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_set_single_msg$"))
+    async def all_slots_set_single_msg_callback(event):
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        
+        _bot_action_states[user_id] = {
+            "action": "WAITING_FOR_ALL_BROADCAST"
+        }
+        prompt_text = utils.get_text("prompt_broadcast", lang)
+        buttons = [[utils.styled_button("🔙 Cancel", "all_slots_set_broadcast", style="primary")]]
+        try:
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_set_multi_msg$"))
+    async def all_slots_set_multi_msg_callback(event):
+        user_id = event.sender_id
+        
+        _bot_action_states[user_id] = {
+            "action": "WAITING_FOR_ALL_MULTI_MSG"
+        }
+        prompt_text = (
+            "📚 **Set Multiple Messages (All Slots)**\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "> Send your multiple broadcast messages separated by commas `,`. The bot will randomly pick one message for each group.\n\n"
+            "💡 **Example Input**:\n"
+            "`Hey check this out!, Join our channel now!, Best deals today! www.example.com`\n\n"
+            "✍️ **Send your comma-separated message list below:**"
+        )
+        buttons = [[utils.styled_button("🔙 Cancel", "all_slots_set_broadcast", style="primary")]]
+        try:
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_toggle_broadcast_mode$"))
+    async def all_slots_toggle_broadcast_mode_callback(event):
+        user_id = event.sender_id
+        sessions = database.get_sessions(user_id)
+        for s in sessions:
+            settings = s.setdefault("settings", {})
+            current_mode = settings.get("broadcast_mode", "single")
+            new_mode = "multiple" if current_mode == "single" else "single"
+            settings["broadcast_mode"] = new_mode
+            database.save_session(s)
+            if userbot_manager.is_bot_running(s["phone"]):
+                userbot_manager.reload_bot_settings(s["phone"])
+        await show_all_slots_dashboard(event, user_id, flash_message="🔄 **Toggled broadcast mode on all userbots!**")
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_set_welcome$"))
+    async def all_slots_set_welcome_callback(event):
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        
+        _bot_action_states[user_id] = {
+            "action": "WAITING_FOR_ALL_WELCOME"
+        }
+        
+        prompt_text = utils.get_text("prompt_all_welcome", lang)
+        buttons = [[utils.styled_button("🔙 Cancel", "menu_all_slots", style="primary")]]
+        try:
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_toggle_(spam|welcome)$"))
+    async def all_slots_toggles_callback(event):
+        feature = event.pattern_match.group(1)
+        user_id = event.sender_id
+        
+        sessions = database.get_sessions(user_id)
+        if not sessions:
+            await event.answer("⚠️ No slots found.", alert=True)
+            return
+            
+        key_map = {
+            "spam": "auto_spam",
+            "welcome": "auto_welcome"
+        }
+        db_key = key_map[feature]
+        
+        any_on = any(s.get("settings", {}).get(db_key, False) for s in sessions)
+        new_state = not any_on
+        
+        for s in sessions:
+            s.setdefault("settings", {})[db_key] = new_state
+            database.save_session(s)
+            userbot_manager.reload_bot_settings(s["phone"])
+            
+        state_word = "ON" if new_state else "OFF"
+        await show_all_slots_dashboard(event, user_id, flash_message=f"⚙️ **{feature.upper()} turned {state_word} for all bots!**")
+
+    @client.on(events.CallbackQuery(pattern=r"^vc_join_(.+)$"))
+    async def vc_join_callback(event):
+        phone = event.pattern_match.group(1)
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        
+        if not userbot_manager.is_bot_running(phone):
+            await event.answer("⚠️ Userbot must be running to join a VC.", alert=True)
+            return
+            
+        _bot_action_states[user_id] = {
+            "phone": phone,
+            "action": "WAITING_FOR_VC_LINK"
+        }
+        
+        prompt_text = utils.get_text("prompt_vc_link", lang)
+        buttons = [[utils.styled_button("🔙 Cancel", f"select_bot_{phone}", style="primary")]]
+        try:
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text, buttons=buttons)
+
     @client.on(events.CallbackQuery(pattern="^no_login_"))
     async def no_login_callback(event):
         user_id = event.sender_id
@@ -592,7 +1332,108 @@ def register_handlers(client):
         await show_bot_dashboard(event, phone, user_id, flash_message=flash)
 
     # ------------------ Text Prompts ------------------
-    @client.on(events.CallbackQuery(pattern=r"^set_(broadcast|welcome|name)_(.+)$"))
+    @client.on(events.CallbackQuery(pattern=r"^set_broadcast_(.+)$"))
+    async def set_broadcast_callback(event):
+        phone = event.pattern_match.group(1).strip()
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        
+        sess = database.get_session(phone)
+        settings = sess.get("settings", {}) if sess else {}
+        mode = settings.get("broadcast_mode", "single")
+        single_msg = settings.get("broadcast_msg")
+        multi_msgs = settings.get("broadcast_messages", [])
+        
+        mode_display = "📚 Multiple (Rotational)" if mode == "multiple" else "✉️ Single (Normal)"
+        single_status = "✅ Set" if single_msg else "❌ Empty"
+        multiple_status = f"✅ Set ({len(multi_msgs)} msgs)" if multi_msgs else "❌ Empty"
+        
+        text = (
+            f"✉️ **Broadcast Message Settings**\n"
+            f"Configure messages for Userbot `{phone}`:\n\n"
+            f"• **Current Mode**: **{mode_display}**\n"
+            f"• **Single Msg**: {single_status}\n"
+            f"• **Multiple Msgs**: {multiple_status}\n\n"
+            f"__How to set multiple messages__: Click 'Set Multiple Messages' and send your messages separated by commas `,`. "
+            f"For example:\n`Message A, Message B, Message C`"
+        )
+        
+        buttons = [
+            [
+                utils.styled_button("✉️ Set Single Message", f"set_single_msg_{phone}", style="primary"),
+                utils.styled_button("📚 Set Multiple Messages", f"set_multi_msg_{phone}", style="primary")
+            ],
+            [
+                utils.styled_button(f"🔄 Mode: {mode.upper()}", f"toggle_broadcast_mode_{phone}", style="primary")
+            ],
+            [
+                utils.styled_button("🔙 Back to Dashboard", f"select_bot_{phone}", style="danger")
+            ]
+        ]
+        try:
+            await event.edit(text, buttons=buttons)
+        except Exception:
+            await event.respond(text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern=r"^set_single_msg_(.+)$"))
+    async def set_single_msg_callback(event):
+        phone = event.pattern_match.group(1).strip()
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        
+        _bot_action_states[user_id] = {
+            "phone": phone,
+            "action": "WAITING_FOR_BROADCAST"
+        }
+        prompt_text = utils.get_text("prompt_broadcast", lang)
+        buttons = [[utils.styled_button("🔙 Cancel", f"set_broadcast_{phone}", style="primary")]]
+        try:
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern=r"^set_multi_msg_(.+)$"))
+    async def set_multi_msg_callback(event):
+        phone = event.pattern_match.group(1).strip()
+        user_id = event.sender_id
+        
+        _bot_action_states[user_id] = {
+            "phone": phone,
+            "action": "WAITING_FOR_MULTI_MSG"
+        }
+        prompt_text = (
+            "📚 **Set Multiple Messages**\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "> Send your multiple broadcast messages separated by commas `,`. The bot will randomly pick one message for each group.\n\n"
+            "💡 **Example Input**:\n"
+            "`Hey check this out!, Join our channel now!, Best deals today! www.example.com`\n\n"
+            "✍️ **Send your comma-separated message list below:**"
+        )
+        buttons = [[utils.styled_button("🔙 Cancel", f"set_broadcast_{phone}", style="primary")]]
+        try:
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern=r"^toggle_broadcast_mode_(.+)$"))
+    async def toggle_broadcast_mode_callback(event):
+        phone = event.pattern_match.group(1).strip()
+        user_id = event.sender_id
+        
+        sess = database.get_session(phone)
+        if sess and str(sess.get("user_id")) == str(user_id):
+            settings = sess.setdefault("settings", {})
+            current_mode = settings.get("broadcast_mode", "single")
+            new_mode = "multiple" if current_mode == "single" else "single"
+            settings["broadcast_mode"] = new_mode
+            database.save_session(sess)
+            userbot_manager.reload_bot_settings(phone)
+            
+        await set_broadcast_callback(event)
+
+    @client.on(events.CallbackQuery(pattern=r"^set_(welcome|name)_(.+)$"))
     async def set_text_callback(event):
         action = event.pattern_match.group(1)
         phone = event.pattern_match.group(2)
@@ -607,7 +1448,6 @@ def register_handlers(client):
         }
         
         prompt_map = {
-            "broadcast": "prompt_broadcast",
             "welcome": "prompt_welcome",
             "name": "prompt_name"
         }
@@ -619,6 +1459,83 @@ def register_handlers(client):
         except Exception:
             await event.respond(prompt_text)
 
+    # ------------------ Play Song callbacks ------------------
+    @client.on(events.CallbackQuery(pattern=r"^play_song_(.+)$"))
+    async def play_song_callback(event):
+        phone = event.pattern_match.group(1).strip()
+        user_id = event.sender_id
+        bot_obj = userbot_manager._running_bots.get(phone)
+        if not bot_obj:
+            await event.answer("⚠️ Userbot is not running.", alert=True)
+            return
+            
+        if not getattr(bot_obj, "current_vc_chat_id", None):
+            await event.answer("⚠️ Userbot is not in any voice chat. Join a VC first!", alert=True)
+            return
+            
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        
+        _bot_action_states[user_id] = {
+            "phone": phone,
+            "action": "WAITING_FOR_SONG"
+        }
+        
+        prompt_text = (
+            "🎵 **Voice Chat Music Player**\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "⚠️ **Important Requirement**:\n"
+            "> Your Userbot must be joined to a Voice Chat (VC) before playing! If not joined, go back and click **Join VC** first.\n\n"
+            "🚀 **Instructions**:\n"
+            "• To play audio track: Send `/play <song name>` or link in bot DM.\n"
+            "• To play video call: Send `/vplay <video name>` or link in bot DM.\n\n"
+            "✍️ **Type your song name or YouTube link below to start playing in audio mode:**"
+        )
+        buttons = [[utils.styled_button("🔙 Cancel", f"vc_menu_{phone}", style="primary")]]
+        try:
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_play_song$"))
+    async def all_slots_play_song_callback(event):
+        user_id = event.sender_id
+        sessions = database.get_sessions(user_id)
+        running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
+        if not running_phones:
+            await event.answer("⚠️ Please start at least one userbot first!", alert=True)
+            return
+            
+        vc_phones = []
+        for phone in running_phones:
+            bot_obj = userbot_manager._running_bots[phone]
+            if getattr(bot_obj, "current_vc_chat_id", None):
+                vc_phones.append(phone)
+                
+        if not vc_phones:
+            await event.answer("⚠️ None of the running userbots are in a voice chat. Make them join a VC first!", alert=True)
+            return
+            
+        _bot_action_states[user_id] = {
+            "action": "WAITING_FOR_ALL_SONG"
+        }
+        
+        prompt_text = (
+            "🎵 **Voice Chat Music Player (All Slots)**\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "⚠️ **Important Requirement**:\n"
+            "> Make sure your active userbots have already joined the Voice Chat (VC) before playing!\n\n"
+            "🚀 **Instructions**:\n"
+            "• To play audio (All): Send `/play <song name>` or link in bot DM.\n"
+            "• To play video (All): Send `/vplay <video name>` or link in bot DM.\n\n"
+            "✍️ **Type your song name or YouTube link below to start playing on all active voice chats in audio mode:**"
+        )
+        buttons = [[utils.styled_button("🔙 Cancel", "all_slots_vc_menu", style="primary")]]
+        try:
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text, buttons=buttons)
+
 
     # ------------------ Interval settings ------------------
     @client.on(events.CallbackQuery(pattern=r"^set_interval_(.+)$"))
@@ -628,6 +1545,38 @@ def register_handlers(client):
         user = database.get_user(user_id)
         lang = user.get("language", "en") if user else "en"
         
+        sess = database.get_session(phone)
+        settings = sess.get("settings", {}) if sess else {}
+        current_delay = settings.get("inter_group_delay", 10.0)
+        current_interval = settings.get("broadcast_interval", 300)
+        
+        text = (
+            f"⏱️ **UserBot Timing Settings**\n\n"
+            f"Configure delay timings for Userbot `{phone}`:\n\n"
+            f"• **Group-to-Group Delay**: `{current_delay}s` (Delay between sending messages to different groups)\n"
+            f"• **Loop Repeat Interval**: `{current_interval}s` (Delay between repeating the broadcast loop)\n\n"
+            f"__Choose an option to modify:__"
+        )
+        buttons = [
+            [
+                utils.styled_button("⏱️ Set Group Delay", f"set_inter_delay_{phone}", style="primary"),
+                utils.styled_button("🔄 Set Loop Interval", f"set_loop_interval_{phone}", style="primary")
+            ],
+            [
+                utils.styled_button("🔙 Back to Dashboard", f"select_bot_{phone}", style="danger")
+            ]
+        ]
+        try:
+            await event.edit(text, buttons=buttons)
+        except Exception:
+            await event.respond(text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern=r"^set_loop_interval_(.+)$"))
+    async def set_loop_interval_callback(event):
+        phone = event.pattern_match.group(1)
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
         text = utils.get_text("interval_title", lang)
         
         buttons = [
@@ -638,10 +1587,9 @@ def register_handlers(client):
             ],
             [
                 utils.styled_button(utils.get_text("btn_int_custom", lang), f"int_custom_{phone}", style="primary"),
-                utils.styled_button(utils.get_text("btn_back_to_bots", lang), f"select_bot_{phone}", style="primary")
+                utils.styled_button("🔙 Back", f"set_interval_{phone}", style="danger")
             ]
         ]
-        
         try:
             await event.edit(text, buttons=buttons)
         except Exception:
@@ -656,7 +1604,7 @@ def register_handlers(client):
         sess = database.get_session(phone)
         flash = None
         if sess and str(sess.get("user_id")) == str(user_id):
-            sess["settings"]["broadcast_interval"] = val
+            sess.setdefault("settings", {})["broadcast_interval"] = val
             database.save_session(sess)
             userbot_manager.reload_bot_settings(phone)
             flash = f"⏱️ **Interval updated to {val}s**"
@@ -677,7 +1625,66 @@ def register_handlers(client):
         
         prompt_text = utils.get_text("prompt_custom_interval", lang)
         try:
-            buttons = [[utils.styled_button("🔙 Cancel", f"select_bot_{phone}", style="primary")]]
+            buttons = [[utils.styled_button("🔙 Cancel", f"set_loop_interval_{phone}", style="primary")]]
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text)
+
+    @client.on(events.CallbackQuery(pattern=r"^set_inter_delay_(.+)$"))
+    async def set_inter_delay_callback(event):
+        phone = event.pattern_match.group(1)
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        text = utils.get_text("inter_delay_title", lang)
+        
+        buttons = [
+            [
+                utils.styled_button(utils.get_text("btn_int_val", lang, val=5), f"del_val_5_{phone}", style="primary"),
+                utils.styled_button(utils.get_text("btn_int_val", lang, val=7), f"del_val_7_{phone}", style="primary"),
+                utils.styled_button(utils.get_text("btn_int_val", lang, val=10), f"del_val_10_{phone}", style="primary")
+            ],
+            [
+                utils.styled_button(utils.get_text("btn_del_custom", lang), f"del_custom_{phone}", style="primary"),
+                utils.styled_button("🔙 Back", f"set_interval_{phone}", style="danger")
+            ]
+        ]
+        try:
+            await event.edit(text, buttons=buttons)
+        except Exception:
+            await event.respond(text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern=r"^del_val_(\d+)_(.+)$"))
+    async def del_val_callback(event):
+        val = int(event.pattern_match.group(1))
+        phone = event.pattern_match.group(2)
+        user_id = event.sender_id
+        
+        sess = database.get_session(phone)
+        flash = None
+        if sess and str(sess.get("user_id")) == str(user_id):
+            sess.setdefault("settings", {})["inter_group_delay"] = val
+            database.save_session(sess)
+            userbot_manager.reload_bot_settings(phone)
+            flash = f"⏱️ **Inter-Group Delay updated to {val}s**"
+            
+        await show_bot_dashboard(event, phone, user_id, flash_message=flash)
+
+    @client.on(events.CallbackQuery(pattern=r"^del_custom_(.+)$"))
+    async def del_custom_callback(event):
+        phone = event.pattern_match.group(1)
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        
+        _bot_action_states[user_id] = {
+            "phone": phone,
+            "action": "WAITING_FOR_CUSTOM_DELAY"
+        }
+        
+        prompt_text = utils.get_text("prompt_custom_inter_delay", lang)
+        try:
+            buttons = [[utils.styled_button("🔙 Cancel", f"set_inter_delay_{phone}", style="primary")]]
             await event.edit(prompt_text, buttons=buttons)
         except Exception:
             await event.respond(prompt_text)
@@ -689,27 +1696,335 @@ def register_handlers(client):
             return
             
         user_id = event.sender_id
+        
+        # Check for /play and /vplay commands first
+        cmd_text = event.text.strip() if event.text else ""
+        if cmd_text.startswith("/play ") or cmd_text.startswith("/vplay "):
+            parts = cmd_text.split(" ", 1)
+            cmd = parts[0].lower()
+            query = parts[1].strip() if len(parts) > 1 else ""
+            if not query:
+                await event.reply("❌ Please provide a song/video name or link.\nFormat: `/play <songname>` or `/vplay <songname>`")
+                return
+                
+            play_type = "video" if cmd == "/vplay" else "audio"
+            
+            sessions = database.get_sessions(user_id)
+            if not sessions:
+                await event.reply("❌ You do not have any userbot slots.")
+                return
+                
+            running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
+            vc_bots = []
+            for p in running_phones:
+                bot_obj = userbot_manager._running_bots[p]
+                if getattr(bot_obj, "current_vc_chat_id", None) or getattr(bot_obj, "current_vc_link", None):
+                    vc_bots.append((p, bot_obj))
+                    
+            if not vc_bots:
+                await event.reply("❌ None of your running userbots are in a Voice Chat. Make them join a VC first!")
+                return
+                
+            progress_msg = await event.reply(f"⏳ **Processing playback request on {len(vc_bots)} userbot(s)...**")
+            
+            success_count = 0
+            song_info_global = None
+            for p, bot_obj in vc_bots:
+                # Re-join VC to avoid video note and audio stream bugs
+                vc_link = getattr(bot_obj, "current_vc_link", None)
+                if vc_link:
+                    await bot_obj.leave_voice_chat()
+                    await asyncio.sleep(1.5)
+                    await bot_obj.join_voice_chat(vc_link)
+                    
+                success, msg, song_info = await bot_obj.play_song(query, play_type=play_type)
+                if success:
+                    success_count += 1
+                    song_info_global = song_info
+                    
+            await progress_msg.delete()
+            
+            if success_count > 0 and song_info_global:
+                caption = (
+                    f"> 🎵 **Now Playing ({play_type.capitalize()} Mode)**\n"
+                    f"> \n"
+                    f"> • **Title**: `{song_info_global['title']}`\n"
+                    f"> • **Duration**: `{song_info_global['duration']}s`\n"
+                    f"> • **Requested by**: [{event.sender.first_name or 'User'}](tg://user?id={user_id})\n"
+                    f"> \n"
+                    f"> 🎧 _Playing on {success_count} userbot(s) in Voice Chats!_"
+                )
+                sent_msg = None
+                try:
+                    sent_msg = await event.reply(caption, file=song_info_global["thumb"])
+                except Exception:
+                    try:
+                        sent_msg = await event.reply(caption)
+                    except Exception:
+                        pass
+                        
+                if sent_msg:
+                    async def auto_delete():
+                        await asyncio.sleep(song_info_global["duration"])
+                        try:
+                            await client.delete_messages(event.chat_id, sent_msg.id)
+                        except Exception:
+                            pass
+                    asyncio.create_task(auto_delete())
+            else:
+                await event.reply("❌ Failed to play song/video on any active Voice Chat.")
+            return
+
         if user_id not in _bot_action_states:
             return
             
-        if event.text.startswith("/start"):
-            _bot_action_states.pop(user_id, None)
-            return
-            
         state = _bot_action_states.pop(user_id)
-        phone = state["phone"]
+        phone = state.get("phone")
         action = state["action"]
         
         user = database.get_user(user_id)
         lang = user.get("language", "en") if user else "en"
         
+        flash = None
+        
+        # --- Handle All Slots Dashboard Text Actions ---
+        if action == "WAITING_FOR_ALL_VC_LINK":
+            link = event.text.strip()
+            if not link:
+                await event.reply("❌ Link cannot be empty.")
+                return
+                
+            sessions = database.get_sessions(user_id)
+            running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
+            if not running_phones:
+                await event.reply("❌ No userbots are currently running. Please start your userbots first.")
+                return
+                
+            progress_msg = await event.reply(f"⏳ **Joining Voice Chat on {len(running_phones)} running userbots...**")
+            success_count = 0
+            fail_msgs = []
+            
+            for phone_num in running_phones:
+                bot_obj = userbot_manager._running_bots[phone_num]
+                success, msg = await bot_obj.join_voice_chat(link)
+                if success:
+                    success_count += 1
+                else:
+                    fail_msgs.append(f"📞 `{phone_num}`: {msg}")
+                    
+            await progress_msg.delete()
+            
+            flash = f"🎙️ **VC Join Results**:\nJoined: {success_count}/{len(running_phones)}"
+            if fail_msgs:
+                flash += f"\nErrors:\n" + "\n".join(fail_msgs)
+                
+            await show_all_slots_dashboard(event, user_id, flash_message=flash)
+            return
+            
+        elif action == "WAITING_FOR_ALL_BROADCAST":
+            broadcast_msg = event.text
+            sessions = database.get_sessions(user_id)
+            for s in sessions:
+                s.setdefault("settings", {})["broadcast_msg"] = broadcast_msg
+                database.save_session(s)
+                if userbot_manager.is_bot_running(s["phone"]):
+                    userbot_manager.reload_bot_settings(s["phone"])
+            flash = "✉️ **Broadcast message updated for all bots!**"
+            await show_all_slots_dashboard(event, user_id, flash_message=flash)
+            return
+            
+        elif action == "WAITING_FOR_ALL_WELCOME":
+            welcome_msg = event.text
+            sessions = database.get_sessions(user_id)
+            for s in sessions:
+                s.setdefault("settings", {})["welcome_msg"] = welcome_msg
+                database.save_session(s)
+                if userbot_manager.is_bot_running(s["phone"]):
+                    userbot_manager.reload_bot_settings(s["phone"])
+            flash = "👋 **Welcome message updated for all bots!**"
+            await show_all_slots_dashboard(event, user_id, flash_message=flash)
+            return
+
+        elif action == "WAITING_FOR_ALL_CLONE_TARGET":
+            target = event.text.strip()
+            if not target:
+                await event.reply("❌ Target cannot be empty. Please enter a valid username/ID.")
+                return
+                
+            clone_type = state.get("clone_type", "complete")
+            sessions = database.get_sessions(user_id)
+            running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
+            if not running_phones:
+                await event.reply("❌ No userbots are currently running. Please start your userbots first.")
+                return
+                
+            progress_msg = await event.reply(f"⏳ **Cloning profile details on {len(running_phones)} running userbots...**")
+            success_count = 0
+            for phone_num in running_phones:
+                success, msg = await userbot_manager.clone_profile(phone_num, target, clone_type=clone_type)
+                if success:
+                    success_count += 1
+            await progress_msg.delete()
+            flash = f"👤 **Profile Cloning Results**:\nCloned successfully on {success_count}/{len(running_phones)} userbots!"
+            await show_all_slots_dashboard(event, user_id, flash_message=flash)
+            return
+
+        elif action == "WAITING_FOR_ALL_NAME":
+            new_name = event.text.strip()
+            if not new_name:
+                await event.reply("❌ Name cannot be empty.")
+                return
+                
+            sessions = database.get_sessions(user_id)
+            updated_count = 0
+            for s in sessions:
+                phone_num = s["phone"]
+                s["name"] = new_name
+                database.save_session(s)
+                if userbot_manager.is_bot_running(phone_num):
+                    try:
+                        from telethon.tl.functions.account import UpdateProfileRequest
+                        bot_obj = userbot_manager._running_bots[phone_num]
+                        await bot_obj.client(UpdateProfileRequest(first_name=new_name))
+                    except Exception:
+                        pass
+                updated_count += 1
+            flash = f"✏️ **Updated name to '{new_name}' for {updated_count} userbots!**"
+            await show_all_slots_dashboard(event, user_id, flash_message=flash)
+            return
+
+        elif action == "WAITING_FOR_ALL_CUSTOM_INTERVAL":
+            val_str = event.text.strip()
+            if val_str.isdigit() and int(val_str) >= 60:
+                val = int(val_str)
+                sessions = database.get_sessions(user_id)
+                for s in sessions:
+                    s.setdefault("settings", {})["broadcast_interval"] = val
+                    database.save_session(s)
+                    userbot_manager.reload_bot_settings(s["phone"])
+                flash = f"⏱️ **Interval updated to {val}s for all bots!**"
+                await show_all_slots_dashboard(event, user_id, flash_message=flash)
+                return
+            else:
+                await event.reply(utils.get_text("interval_invalid", lang))
+                return
+
+        elif action == "WAITING_FOR_ALL_CUSTOM_DELAY":
+            val_str = event.text.strip()
+            if val_str.isdigit() and 2 <= int(val_str) <= 60:
+                val = int(val_str)
+                sessions = database.get_sessions(user_id)
+                for s in sessions:
+                    s.setdefault("settings", {})["inter_group_delay"] = val
+                    database.save_session(s)
+                    userbot_manager.reload_bot_settings(s["phone"])
+                flash = f"⏱️ **Inter-Group Delay updated to {val}s for all bots!**"
+                await show_all_slots_dashboard(event, user_id, flash_message=flash)
+                return
+            else:
+                await event.reply(utils.get_text("inter_delay_invalid", lang))
+                return
+
+        elif action == "WAITING_FOR_ALL_MULTI_MSG":
+            raw_text = event.text
+            msgs = [m.strip() for m in raw_text.split(",") if m.strip()]
+            if msgs:
+                sessions = database.get_sessions(user_id)
+                for s in sessions:
+                    s.setdefault("settings", {})["broadcast_messages"] = msgs
+                    database.save_session(s)
+                    if userbot_manager.is_bot_running(s["phone"]):
+                        userbot_manager.reload_bot_settings(s["phone"])
+                flash = f"✅ **Randomized messages updated for all bots ({len(msgs)} msgs)!**"
+                await show_all_slots_dashboard(event, user_id, flash_message=flash)
+                return
+            else:
+                await event.reply("❌ Message list cannot be empty. Separate messages with commas `,`.")
+                return
+
+        elif action == "WAITING_FOR_ALL_SONG":
+            query = event.text.strip()
+            if not query:
+                await event.reply("❌ Song query cannot be empty.")
+                return
+                
+            sessions = database.get_sessions(user_id)
+            running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
+            
+            vc_bots = []
+            for p in running_phones:
+                bot_obj = userbot_manager._running_bots[p]
+                if getattr(bot_obj, "current_vc_chat_id", None) or getattr(bot_obj, "current_vc_link", None):
+                    vc_bots.append((p, bot_obj))
+                    
+            if not vc_bots:
+                await event.reply("❌ No running userbots are in a Voice Chat.")
+                return
+                
+            progress_msg = await event.reply(f"⏳ **Searching and playing song on {len(vc_bots)} userbots...**")
+            
+            success_count = 0
+            song_info_global = None
+            for p, bot_obj in vc_bots:
+                # Re-join VC to avoid stream bugs
+                vc_link = getattr(bot_obj, "current_vc_link", None)
+                if vc_link:
+                    await bot_obj.leave_voice_chat()
+                    await asyncio.sleep(1.5)
+                    await bot_obj.join_voice_chat(vc_link)
+                    
+                success, msg, song_info = await bot_obj.play_song(query, play_type="audio")
+                if success:
+                    success_count += 1
+                    song_info_global = song_info
+                    
+            await progress_msg.delete()
+            
+            if success_count > 0 and song_info_global:
+                caption = (
+                    f"> 🎵 **Now Playing (All Slots)**\n"
+                    f"> \n"
+                    f"> • **Title**: `{song_info_global['title']}`\n"
+                    f"> • **Duration**: `{song_info_global['duration']}s`\n"
+                    f"> • **Requested by**: [{user.get('name', 'User')}](tg://user?id={user_id})\n"
+                    f"> \n"
+                    f"> 🎧 _Playing on {success_count} userbot(s) in Voice Chats!_"
+                )
+                sent_msg = None
+                try:
+                    sent_msg = await event.reply(caption, file=song_info_global["thumb"])
+                except Exception:
+                    try:
+                        sent_msg = await event.reply(caption)
+                    except Exception:
+                        pass
+                
+                if sent_msg:
+                    async def auto_delete():
+                        await asyncio.sleep(song_info_global["duration"])
+                        try:
+                            await client.delete_messages(event.chat_id, sent_msg.id)
+                        except Exception:
+                            pass
+                    asyncio.create_task(auto_delete())
+                    
+                flash = f"✅ **Playing song**: {song_info_global['title']}"
+            else:
+                flash = "❌ **Failed to play song on any userbot.**"
+                
+            await show_all_slots_dashboard(event, user_id, flash_message=flash)
+            return
+            
+        # --- Handle Single Bot Actions ---
+        if not phone:
+            await event.reply("❌ Session not found.")
+            return
+            
         sess = database.get_session(phone)
         if not sess or str(sess.get("user_id")) != str(user_id):
             await event.reply("❌ Session error.")
             return
             
-        flash = None
-        
         # 1. Broadcast Message
         if action == "WAITING_FOR_BROADCAST":
             sess["settings"]["broadcast_msg"] = event.text
@@ -722,6 +2037,27 @@ def register_handlers(client):
             database.save_session(sess)
             flash = "👋 **Welcome message updated successfully!**"
             
+        # 2.5 Join VC Link
+        elif action == "WAITING_FOR_VC_LINK":
+            link = event.text.strip()
+            if not link:
+                await event.reply("❌ Link cannot be empty.")
+                return
+                
+            if not userbot_manager.is_bot_running(phone):
+                await event.reply("❌ Userbot is not running. Please start it first.")
+                return
+                
+            progress_msg = await event.reply("⏳ **Joining Voice Chat, please wait...**")
+            bot_obj = userbot_manager._running_bots[phone]
+            success, msg = await bot_obj.join_voice_chat(link)
+            await progress_msg.delete()
+            
+            if success:
+                flash = f"✅ **Joined Voice Chat!**\n{msg}"
+            else:
+                flash = f"❌ **Failed to join VC:** {msg}"
+                
         # 3. Clone Profile
         elif action == "WAITING_FOR_CLONE_TARGET":
             target = event.text.strip()
@@ -771,6 +2107,81 @@ def register_handlers(client):
             else:
                 await event.reply(utils.get_text("interval_invalid", lang))
                 return
+
+        # 5.5 Custom Delay
+        elif action == "WAITING_FOR_CUSTOM_DELAY":
+            val_str = event.text.strip()
+            if val_str.isdigit() and 2 <= int(val_str) <= 60:
+                val = int(val_str)
+                sess.setdefault("settings", {})["inter_group_delay"] = val
+                database.save_session(sess)
+                flash = f"⏱️ **Inter-Group Delay updated to {val}s**"
+            else:
+                await event.reply(utils.get_text("inter_delay_invalid", lang))
+                return
+
+        # 5.6 Multiple Messages
+        elif action == "WAITING_FOR_MULTI_MSG":
+            raw_text = event.text
+            msgs = [m.strip() for m in raw_text.split(",") if m.strip()]
+            if msgs:
+                sess.setdefault("settings", {})["broadcast_messages"] = msgs
+                database.save_session(sess)
+                flash = f"✅ **Successfully set {len(msgs)} messages for randomized broadcast!**"
+            else:
+                await event.reply("❌ Message list cannot be empty. Separate messages with commas `,`.")
+                return
+
+        # 5.7 Play Song query
+        elif action == "WAITING_FOR_SONG":
+            query = event.text.strip()
+            if not query:
+                await event.reply("❌ Song query cannot be empty.")
+                return
+                
+            progress_msg = await event.reply("⏳ **Searching and playing song, please wait...**")
+            
+            # Re-join VC to avoid stream bugs
+            vc_link = getattr(bot_obj, "current_vc_link", None)
+            if vc_link:
+                await bot_obj.leave_voice_chat()
+                await asyncio.sleep(1.5)
+                await bot_obj.join_voice_chat(vc_link)
+                
+            success, msg, song_info = await bot_obj.play_song(query, play_type="audio")
+            await progress_msg.delete()
+            
+            if success and song_info:
+                caption = (
+                    f"> 🎵 **Now Playing**\n"
+                    f"> \n"
+                    f"> • **Title**: `{song_info['title']}`\n"
+                    f"> • **Duration**: `{song_info['duration']}s`\n"
+                    f"> • **Requested by**: [{user.get('name', 'User')}](tg://user?id={user_id})\n"
+                    f"> \n"
+                    f"> 🎧 _Playing in voice chat for userbot `{phone}`_"
+                )
+                sent_msg = None
+                try:
+                    sent_msg = await event.reply(caption, file=song_info["thumb"])
+                except Exception:
+                    try:
+                        sent_msg = await event.reply(caption)
+                    except Exception:
+                        pass
+                
+                if sent_msg:
+                    async def auto_delete():
+                        await asyncio.sleep(song_info["duration"])
+                        try:
+                            await client.delete_messages(event.chat_id, sent_msg.id)
+                        except Exception:
+                            pass
+                    asyncio.create_task(auto_delete())
+                    
+                flash = f"✅ **Playing song**: {song_info['title']}"
+            else:
+                flash = f"❌ **Failed to play**: {msg}"
                 
         # Return to dashboard showing updated stats and flash notification
         userbot_manager.reload_bot_settings(phone)

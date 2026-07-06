@@ -26,7 +26,32 @@ logger = logging.getLogger(__name__)
 # Apply Windows compatibility patch for nested asyncio loops
 nest_asyncio.apply()
 
+LOCK_FILE = "bot.lock"
+_lock_fp = None
+
+def check_single_instance():
+    global _lock_fp
+    import sys
+    if os.path.exists(LOCK_FILE):
+        try:
+            os.remove(LOCK_FILE)
+        except OSError:
+            logger.error("Another instance of the bot is already running! (bot.lock is locked)")
+            print("\n❌ ERROR: Another instance of the bot is already running!")
+            print("Please kill the running Python processes and try again.\n")
+            sys.exit(1)
+            
+    try:
+        _lock_fp = open(LOCK_FILE, "w")
+        _lock_fp.write(str(os.getpid()))
+        _lock_fp.flush()
+    except IOError:
+        logger.error("Failed to acquire lock. Another instance might be running.")
+        print("\n❌ ERROR: Failed to acquire lock. Another instance might be running.\n")
+        sys.exit(1)
+
 async def main():
+    check_single_instance()
     logger.info("Initializing database connection...")
     database.db_init()
     
@@ -42,12 +67,19 @@ async def main():
     await bot.start(bot_token=config.BOT_TOKEN)
     logger.info("Telegram Bot Manager is running successfully.")
     
+    # Track tasks to prevent garbage collection
+    background_tasks = set()
+
     # Resume userbots that were running prior to shutdown in background
-    asyncio.create_task(userbot_manager.start_all_running_bots())
+    t1 = asyncio.create_task(userbot_manager.start_all_running_bots())
+    background_tasks.add(t1)
+    t1.add_done_callback(background_tasks.discard)
     
     # Start Gmail autopay approval check loop in background
     from handlers.payments_extended import start_gmail_polling
-    asyncio.create_task(start_gmail_polling(bot))
+    t2 = asyncio.create_task(start_gmail_polling(bot))
+    background_tasks.add(t2)
+    t2.add_done_callback(background_tasks.discard)
     
     try:
         # Run main bot until connection is lost
@@ -55,6 +87,15 @@ async def main():
     finally:
         # Stop all background userbots gracefully
         await userbot_manager.stop_all_bots()
+        
+        # Release and clean up lock file
+        global _lock_fp
+        if _lock_fp:
+            _lock_fp.close()
+            try:
+                os.remove(LOCK_FILE)
+            except Exception:
+                pass
 
 if __name__ == "__main__":
     try:

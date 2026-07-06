@@ -2,7 +2,7 @@ import os
 import glob
 import logging
 import asyncio
-from typing import Dict
+from typing import Dict, Optional
 import database
 from userbot import UserBot
 
@@ -280,3 +280,9 @@ def reload_bot_settings(session_id: str):
     """
     if session_id in _running_bots:
         _running_bots[session_id].reload_settings()
+
+def get_running_bot(session_id: str) -> Optional[UserBot]:
+    """
+    Returns the running UserBot instance for a session_id if it exists.
+    """
+    return _running_bots.get(session_id)

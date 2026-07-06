@@ -8,7 +8,8 @@ BOT_NAME = os.getenv("BOT_NAME", "𝗫𝗧𝗥 𝗔𝗗 𝗕𝗢𝗧")
 DEFAULT_DB_NAME = "xtr_ad_bot"
 
 # Telegram API credentials for userbots
-API_ID = int(os.getenv("API_ID", "0"))
+api_id_val = os.getenv("API_ID", "")
+API_ID = int(api_id_val) if api_id_val.strip().isdigit() else 0
 API_HASH = os.getenv("API_HASH", "")
 
 # Bot token for the main manager bot

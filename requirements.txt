@@ -2,3 +2,7 @@ telethon
 nest_asyncio
 pymongo
 python-dotenv
+py-tgcalls==0.9.7
+py-yt-search
+aiohttp
+cryptg

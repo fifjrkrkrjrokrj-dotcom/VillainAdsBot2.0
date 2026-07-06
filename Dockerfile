@@ -8,10 +8,11 @@ ENV PYTHONUNBUFFERED=1
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies for build requirements
+# Install system dependencies for build requirements and streaming
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     python3-dev \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Install python dependencies

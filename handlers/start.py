@@ -80,8 +80,10 @@ async def show_main_menu(event, user_id):
         ],
         [
             styled_button(get_text("btn_settings", lang), "menu_settings", style="primary"),
-            styled_button(get_text("btn_status", lang), "menu_status", style="primary"),
-            styled_button("👫 Refer & Earn", "settings_referrals", style="primary")
+            styled_button(get_text("btn_status", lang), "menu_status", style="primary")
+        ],
+        [
+            styled_button("👫 Refer & Earn", "settings_referrals", style="success")
         ],
         [
             Button.url("👑 Owner 1", "https://t.me/v90001"),

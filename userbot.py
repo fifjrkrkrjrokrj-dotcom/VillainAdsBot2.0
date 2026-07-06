@@ -13,6 +13,73 @@ import database
 
 logger = logging.getLogger(__name__)
 
+import aiohttp
+from pytgcalls import PyTgCalls
+from pytgcalls.types import AudioPiped
+from py_yt import VideosSearch
+
+API_URL = "https://api.shrutibots.site"
+API_KEY = "ShrutiBotsGMiLr8wF1tPbxVV6fRgH"
+DOWNLOAD_DIR = "downloads"
+
+async def download_media(query: str, download_type: str = "audio") -> tuple:
+    """
+    Downloads audio/video for voice call using YouTube API search.
+    Returns (file_path: str, title: str, duration: int, thumbnail: str)
+    """
+    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+    try:
+        if not query.startswith("http"):
+            search = VideosSearch(query, limit=1)
+            res = await search.next()
+            if not res or not res.get("result"):
+                return None, None, None, None
+            result = res["result"][0]
+        else:
+            search = VideosSearch(query, limit=1)
+            res = await search.next()
+            if not res or not res.get("result"):
+                return None, None, None, None
+            result = res["result"][0]
+
+        title = result["title"]
+        duration = result.get("duration", "0:00")
+        thumb = result["thumbnails"][0]["url"].split("?")[0]
+        vidid = result["id"]
+        youtube_url = f"https://www.youtube.com/watch?v={vidid}"
+
+        # duration convert
+        duration_sec = sum(
+            int(x) * 60 ** i
+            for i, x in enumerate(reversed(duration.split(":")))
+        )
+
+        ext = "mp3" if download_type == "audio" else "mp4"
+        file_path = os.path.join(DOWNLOAD_DIR, f"{vidid}.{ext}")
+        if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
+            return file_path, title, duration_sec, thumb
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{API_URL}/download",
+                params={
+                    "url": youtube_url,
+                    "type": download_type,
+                    "api_key": API_KEY
+                },
+                timeout=aiohttp.ClientTimeout(total=600)
+            ) as resp:
+                if resp.status != 200:
+                    raise Exception("API Download Failed")
+                with open(file_path, "wb") as f:
+                    async for chunk in resp.content.iter_chunked(1024 * 128):
+                        f.write(chunk)
+
+        return file_path, title, duration_sec, thumb
+    except Exception as e:
+        logger.error(f"Download media error: {e}")
+        return None, None, None, None
+
 async def call_gpt_api(api_key: str, user_message: str) -> str:
     """
     Calls OpenAI GPT-3.5 API using standard urllib to prevent external library issues.
@@ -85,6 +152,134 @@ async def join_vc(client: TelegramClient, peer_id: int) -> bool:
     return False
 
 
+async def get_peer_from_link(client: TelegramClient, link: str):
+    """
+    Resolves a group/channel link or username to a chat entity,
+    joining the channel/group if the userbot is not already a member.
+    """
+    link = link.strip()
+    if not link:
+        return None
+        
+    from telethon.tl.functions.messages import CheckChatInviteRequest, ImportChatInviteRequest
+    from telethon.tl.functions.channels import JoinChannelRequest
+    from telethon.tl.types import ChatInviteAlready, ChatInvite
+    
+    # Check if link is a numeric ID
+    try:
+        val = link
+        if val.startswith("-100"):
+            return await client.get_entity(int(val))
+        elif val.startswith("-") and val[1:].isdigit():
+            return await client.get_entity(int(val))
+        elif val.isdigit():
+            return await client.get_entity(int(val))
+    except Exception:
+        pass
+        
+    # Check if it is a private invite link
+    if "t.me/+" in link or "t.me/joinchat/" in link:
+        # Extract join hash
+        if "t.me/+" in link:
+            hash_val = link.split('+')[-1].split('/')[0].strip()
+        else:
+            hash_val = link.split('joinchat/')[-1].split('/')[0].strip()
+            
+        try:
+            invite = await client(CheckChatInviteRequest(hash_val))
+            if isinstance(invite, ChatInviteAlready):
+                return invite.chat
+            else:
+                # Need to join
+                updates = await client(ImportChatInviteRequest(hash_val))
+                if updates and hasattr(updates, 'chats') and updates.chats:
+                    return updates.chats[0]
+        except Exception as e:
+            logger.warning(f"Error checking/joining invite link {link}: {e}")
+            # Try to get entity directly as a fallback
+            try:
+                return await client.get_entity(link)
+            except Exception:
+                pass
+    else:
+        # It's a username or public link
+        username = link.split('/')[-1].strip()
+        if username.startswith("@"):
+            username = username[1:]
+            
+        try:
+            # Join channel first
+            await client(JoinChannelRequest(username))
+        except Exception as e:
+            logger.warning(f"Error joining public channel {username}: {e}")
+            
+        try:
+            return await client.get_entity(username)
+        except Exception as e:
+            logger.warning(f"Error getting entity for {username}: {e}")
+            
+    return None
+
+async def join_vc_by_link(client: TelegramClient, link: str) -> tuple:
+    """
+    Joins a channel/group from a link and joins its active voice chat.
+    Returns (success: bool, message: str)
+    """
+    try:
+        entity = await get_peer_from_link(client, link)
+        if not entity:
+            return False, "Could not resolve or join the group/channel."
+            
+        # Try to join VC
+        from telethon.tl.functions.channels import GetFullChannelRequest
+        from telethon.tl.functions.messages import GetFullChatRequest
+        from telethon.tl.functions.phone import JoinGroupCallRequest
+        from telethon.tl.types import InputGroupCall, DataJSON, Channel, GroupCallDiscarded
+        
+        if isinstance(entity, Channel):
+            full = await client(GetFullChannelRequest(entity))
+        else:
+            full = await client(GetFullChatRequest(entity.id))
+            
+        group_call = full.full_chat.call
+        if group_call and not isinstance(group_call, GroupCallDiscarded):
+            import random
+            max_retries = 5
+            last_err = None
+            for attempt in range(max_retries):
+                random_ssrc = random.randint(100000, 999999999)
+                try:
+                    params_json = f'{{"transport":{{"webrtc":true}},"muted":true,"video_stopped":true,"ssrc":{random_ssrc}}}'
+                    await client(JoinGroupCallRequest(
+                        call=InputGroupCall(
+                            id=group_call.id,
+                            access_hash=group_call.access_hash
+                        ),
+                        join_as=await client.get_input_entity('me'),
+                        params=DataJSON(data=params_json),
+                        muted=True
+                    ))
+                    logger.info(f"Successfully joined VC for peer {entity.id} with SSRC {random_ssrc}")
+                    chat_title = getattr(entity, 'title', 'Group')
+                    return True, f"Successfully joined VC of {chat_title}!", {"group_call": group_call, "ssrc": random_ssrc, "chat_id": entity.id}
+                except Exception as join_err:
+                    err_str = str(join_err).lower()
+                    last_err = join_err
+                    if "ssrc" in err_str or "duplicate" in err_str:
+                        logger.warning(f"SSRC collision on attempt {attempt + 1}, retrying with new SSRC... Error: {join_err}")
+                        await asyncio.sleep(0.5)
+                        continue
+                    else:
+                        break
+            raise last_err if last_err else Exception("Failed to join call")
+        else:
+            chat_title = getattr(entity, 'title', 'Group')
+            return False, f"No active voice chat (VC) found in {chat_title}.", None
+    except Exception as e:
+        logger.warning(f"Error joining VC by link {link}: {e}")
+        return False, f"Error: {e}", None
+
+
 async def join_channel_single(client: TelegramClient, ch: str) -> bool:
     """
     Attempts to join a single channel or group by invite link or username.
@@ -113,12 +308,44 @@ async def join_channel_single(client: TelegramClient, ch: str) -> bool:
         logger.warning(f"Failed to join channel {ch}: {e}")
         return False
 
-async def force_join_channels(client: TelegramClient, channels: list):
+async def force_join_channels(client: TelegramClient, channels: list, session_id: str = None):
     """
     Forcibly joins the userbot to a list of channels or invite links.
     """
+    joined_now = []
+    
+    # Load already joined list if session_id is provided
+    sess_data = None
+    already_joined = []
+    if session_id:
+        sess_data = database.get_session(session_id)
+        if sess_data:
+            already_joined = sess_data.get("joined_channels", [])
+            
     for ch in channels:
-        await join_channel_single(client, ch)
+        ch_clean = ch.strip()
+        if not ch_clean:
+            continue
+            
+        # Check if already joined and saved to avoid invite link flood waits
+        if ch_clean in already_joined:
+            logger.info(f"Skipping auto-join for already joined channel: {ch_clean}")
+            continue
+            
+        success = await join_channel_single(client, ch_clean)
+        if success:
+            joined_now.append(ch_clean)
+            
+    # Save newly joined channels to MongoDB
+    if sess_data and joined_now:
+        # Fetch fresh database record to avoid potential race conditions
+        sess_data = database.get_session(session_id)
+        if sess_data:
+            current_joined = sess_data.setdefault("joined_channels", [])
+            for c in joined_now:
+                if c not in current_joined:
+                    current_joined.append(c)
+            database.save_session(sess_data)
 
 async def apply_branding(client: TelegramClient, branding_username: str, session_data: dict):
     """
@@ -197,6 +424,11 @@ class UserBot:
         self.broadcast_task: Optional[asyncio.Task] = None
         self.joined_vcs: Set[int] = set()
         self.tag_cooldown = {}
+        self.vc_keepalive_task: Optional[asyncio.Task] = None
+        self.current_vc_chat_id: Optional[int] = None
+        self.current_vc_link: Optional[str] = None
+        self.pytgcalls_client: Optional[PyTgCalls] = None
+        self.bg_tasks: Set[asyncio.Task] = set()
         
         # Caching attributes to resolve performance bottlenecks
         self.settings = {}
@@ -218,6 +450,167 @@ class UserBot:
                     self.broadcast_task.cancel()
                 self.broadcast_task = asyncio.create_task(self.broadcast_loop())
                 logger.info(f"Restarted broadcast loop for userbot {self.session_id} to apply new settings/interval immediately.")
+
+    async def vc_keepalive_loop(self, group_call, ssrc):
+        from telethon.tl.functions.phone import CheckGroupCallRequest
+        from telethon.tl.types import InputGroupCall
+        try:
+            while True:
+                await asyncio.sleep(8)
+                if not self.client or not self.is_running:
+                    break
+                try:
+                    await self.client(CheckGroupCallRequest(
+                        call=InputGroupCall(
+                            id=group_call.id,
+                            access_hash=group_call.access_hash
+                        ),
+                        sources=[ssrc]
+                    ))
+                    logger.debug(f"Sent VC keepalive for userbot {self.session_id} (SSRC: {ssrc})")
+                except Exception as e:
+                    logger.warning(f"VC keepalive ping failed for userbot {self.session_id}: {e}")
+                    if "call_already_discarded" in str(e).lower() or "groupcall_already_discarded" in str(e).lower():
+                        break
+        except asyncio.CancelledError:
+            pass
+
+    async def join_voice_chat(self, link: str) -> tuple:
+        """
+        Attempts to join the active voice call of a group/channel by link.
+        """
+        if not self.is_running or not self.client:
+            return False, "Userbot is not running."
+            
+        if self.vc_keepalive_task:
+            self.vc_keepalive_task.cancel()
+            self.vc_keepalive_task = None
+            
+        success, msg, call_info = await join_vc_by_link(self.client, link)
+        if success and call_info:
+            self.current_vc_chat_id = call_info["chat_id"]
+            self.current_vc_link = link
+            self.vc_keepalive_task = asyncio.create_task(
+                self.vc_keepalive_loop(call_info["group_call"], call_info["ssrc"])
+            )
+        return success, msg
+
+    async def leave_voice_chat(self) -> tuple:
+        """
+        Leaves any active group call/VC the userbot is in.
+        """
+        if not self.is_running or not self.client:
+            return False, "Userbot is not running."
+            
+        if self.vc_keepalive_task:
+            self.vc_keepalive_task.cancel()
+            self.vc_keepalive_task = None
+            
+        from telethon.tl.functions.phone import LeaveGroupCallRequest
+        from telethon.tl.functions.channels import GetFullChannelRequest
+        from telethon.tl.functions.messages import GetFullChatRequest
+        from telethon.tl.types import InputGroupCall, GroupCallDiscarded
+        
+        try:
+            dialogs = await self.client.get_dialogs(limit=100)
+            left_count = 0
+            for d in dialogs:
+                if d.is_group or d.is_channel:
+                    try:
+                        from telethon.tl.types import Channel
+                        if isinstance(d.entity, Channel):
+                            full = await self.client(GetFullChannelRequest(d.entity))
+                        else:
+                            full = await self.client(GetFullChatRequest(d.entity.id))
+                            
+                        group_call = full.full_chat.call
+                        if group_call and not isinstance(group_call, GroupCallDiscarded):
+                            await self.client(LeaveGroupCallRequest(
+                                call=InputGroupCall(
+                                    id=group_call.id,
+                                    access_hash=group_call.access_hash
+                                ),
+                                source=0
+                            ))
+                            left_count += 1
+                    except Exception:
+                        pass
+            if self.pytgcalls_client:
+                try:
+                    if self.current_vc_chat_id:
+                        await self.pytgcalls_client.leave_group_call(self.current_vc_chat_id)
+                except Exception:
+                    pass
+                try:
+                    await self.pytgcalls_client.stop()
+                except Exception:
+                    pass
+                self.pytgcalls_client = None
+                
+            self.current_vc_chat_id = None
+            self.current_vc_link = None
+            return True, f"Successfully left {left_count} voice chat(s)."
+        except Exception as e:
+            logger.warning(f"Error leaving VC for userbot {self.session_id}: {e}")
+            return False, f"Error leaving VC: {e}"
+
+    async def get_pytgcalls(self) -> PyTgCalls:
+        if not self.pytgcalls_client:
+            self.pytgcalls_client = PyTgCalls(self.client)
+            await self.pytgcalls_client.start()
+        return self.pytgcalls_client
+
+    async def play_song(self, query: str, play_type: str = "audio") -> tuple:
+        """
+        Plays a song (audio or video) in the current active Voice Chat of this userbot.
+        Returns (success: bool, message: str, song_info: dict)
+        """
+        if not self.is_running or not self.client:
+            return False, "Userbot is not running.", None
+            
+        if not getattr(self, "current_vc_chat_id", None):
+            return False, "Userbot is not currently in any Voice Chat (VC). Please make it join a VC first.", None
+            
+        # Download the media
+        logger.info(f"Userbot {self.session_id} downloading {play_type} query: {query}")
+        file_path, title, duration, thumb = await download_media(query, download_type=play_type)
+        if not file_path:
+            return False, "Failed to download/search the media.", None
+            
+        try:
+            pytg = await self.get_pytgcalls()
+            
+            if play_type == "video":
+                from pytgcalls.types import AudioVideoPiped
+                stream_obj = AudioVideoPiped(file_path)
+            else:
+                stream_obj = AudioPiped(file_path)
+                
+            try:
+                await pytg.join_group_call(
+                    self.current_vc_chat_id,
+                    stream_obj
+                )
+            except Exception as join_err:
+                try:
+                    await pytg.change_stream(
+                        self.current_vc_chat_id,
+                        stream_obj
+                    )
+                except Exception as change_err:
+                    logger.error(f"PyTgCalls play failed on join/change: {join_err} | {change_err}")
+                    return False, f"Could not stream media: {change_err}", None
+                    
+            song_info = {
+                "title": title,
+                "duration": duration,
+                "thumb": thumb,
+                "file_path": file_path
+            }
+            return True, f"Now playing {title}", song_info
+        except Exception as e:
+            logger.error(f"Error playing media: {e}")
+            return False, f"Error playing media: {e}", None
 
     async def get_groups(self, force_refresh: bool = False) -> list:
         """
@@ -298,18 +691,23 @@ class UserBot:
             ub_joins = global_settings.get("userbot_auto_join_links", [])
             if ub_joins:
                 support_links.extend(ub_joins)
-                
             if support_links:
-                asyncio.create_task(force_join_channels(self.client, support_links))
-
+                t_join1 = asyncio.create_task(force_join_channels(self.client, support_links, session_id=self.session_id))
+                self.bg_tasks.add(t_join1)
+                t_join1.add_done_callback(self.bg_tasks.discard)
+ 
             # Auto-join force subscribe channels for the bot users
             fj_links = global_settings.get("force_join_links", [])
             if fj_links:
-                asyncio.create_task(force_join_channels(self.client, fj_links))
+                t_join2 = asyncio.create_task(force_join_channels(self.client, fj_links, session_id=self.session_id))
+                self.bg_tasks.add(t_join2)
+                t_join2.add_done_callback(self.bg_tasks.discard)
                 
             brand_username = global_settings.get("branding_username")
             if brand_username:
-                asyncio.create_task(apply_branding(self.client, brand_username, sess_data))
+                t_brand = asyncio.create_task(apply_branding(self.client, brand_username, sess_data))
+                self.bg_tasks.add(t_brand)
+                t_brand.add_done_callback(self.bg_tasks.discard)
                 
             # Register event handlers
             self._register_handlers()
@@ -352,6 +750,24 @@ class UserBot:
         
         if self.broadcast_task:
             self.broadcast_task.cancel()
+            
+        if self.vc_keepalive_task:
+            self.vc_keepalive_task.cancel()
+            self.vc_keepalive_task = None
+            
+        if self.pytgcalls_client:
+            try:
+                if self.current_vc_chat_id:
+                    await self.pytgcalls_client.leave_group_call(self.current_vc_chat_id)
+            except Exception:
+                pass
+            try:
+                await self.pytgcalls_client.stop()
+            except Exception:
+                pass
+            self.pytgcalls_client = None
+            
+        self.current_vc_chat_id = None
             
         sess_data = database.get_session(self.session_id)
         if sess_data:
@@ -426,13 +842,24 @@ class UserBot:
         """
         while self.is_running:
             if self.settings.get("auto_spam"):
-                msg = self.settings.get("broadcast_msg")
-                if msg:
+                # Check broadcast mode (single vs multiple/rotational)
+                mode = self.settings.get("broadcast_mode", "single")
+                if mode == "multiple":
+                    broadcast_messages = self.settings.get("broadcast_messages", [])
+                    if not broadcast_messages:
+                        broadcast_messages = [self.settings.get("broadcast_msg")]
+                else:
+                    broadcast_messages = [self.settings.get("broadcast_msg")]
+                    
+                broadcast_messages = [m for m in broadcast_messages if m]
+                
+                if broadcast_messages:
                     try:
                         # Use cached groups (fetches once an hour unless manually refreshed)
                         groups = await self.get_groups()
                         
                         sent_to_some = False
+                        msg_index = 0
                         for g in groups:
                             if not self.is_running:
                                 break
@@ -441,10 +868,16 @@ class UserBot:
                             if not self.settings.get("auto_spam"):
                                 break
                                 
+                            # Choose a random message from the multiple messages list
+                            current_msg = random.choice(broadcast_messages)
+                            
                             try:
-                                await self.client.send_message(g.id, msg)
+                                await self.client.send_message(g.id, current_msg)
                                 sent_to_some = True
-                                await asyncio.sleep(2.0) # short sleep to bypass rate limits
+                                
+                                # Dynamic group-to-group sleep to bypass spambot limits
+                                inter_delay = self.settings.get("inter_group_delay", 10.0)
+                                await asyncio.sleep(inter_delay)
                             except Exception as e:
                                 logger.warning(f"Failed to send broadcast message to group {g.id}: {e}")
                                 

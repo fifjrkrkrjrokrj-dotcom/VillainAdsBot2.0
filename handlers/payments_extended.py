@@ -410,7 +410,7 @@ def register_handlers(client):
             import config
             pn_encoded = urllib.parse.quote(config.BOT_NAME)
             upi_uri = f"upi://pay?pa={upi_id}&pn={pn_encoded}&am={cost_inr:.2f}&cu=INR&tn={payment_id}"
-            qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={urllib.parse.quote(upi_uri)}"
+            qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&format=jpg&data={urllib.parse.quote(upi_uri)}"
         elif method == "usdt":
             address_text = f"🪙 USDT (BEP20) Address:\n`{global_settings.get('usdt_bep20_address', '0x000')}`"
             qr_url = None
@@ -439,8 +439,8 @@ def register_handlers(client):
                 with urllib.request.urlopen(req) as response:
                     qr_bytes = response.read()
                 
-                # Write to temp file with .png extension to force photo upload
-                fd, temp_file_path = tempfile.mkstemp(suffix=".png")
+                # Write to temp file with .jpg extension to force photo upload
+                fd, temp_file_path = tempfile.mkstemp(suffix=".jpg")
                 try:
                     with os.fdopen(fd, 'wb') as tmp:
                         tmp.write(qr_bytes)

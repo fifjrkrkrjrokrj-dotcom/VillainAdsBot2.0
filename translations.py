@@ -2,12 +2,12 @@ TRANSLATIONS = {
     "en": {
         "select_lang": "📱 Please select your language / कृपया अपनी भाषा चुनें / Пожалуйста, выберите язык:",
         "tos_title": "⚠️ Terms of Service",
-        "tos_text": "⚠️ **Disclaimer & Terms of Service**\n\n1. This bot is a tool to automate personal Telegram accounts.\n2. Running automated actions (like spams or rapid broadcasts) violates Telegram's Terms of Service and might result in your account being **banned** or **frozen**.\n3. The bot owner and developer are not responsible for any bans, data loss, or action taken on your account.\n4. Use it at your own risk.\n\nDo you accept these terms to proceed?",
+        "tos_text": "⚠️ **Disclaimer & Terms of Service**\n━━━━━━━━━━━━━━━━━━━━\n> 1. This bot is a tool to automate personal Telegram accounts.\n> 2. Running automated actions (like spams or rapid broadcasts) violates Telegram's Terms of Service and might result in your account being **banned** or **frozen**.\n> 3. The bot owner and developer are not responsible for any bans, data loss, or action taken on your account.\n> 4. Use it at your own risk.\n\nDo you accept these terms to proceed?",
         "tos_accept_btn": "✅ Accept & Continue",
         "tos_accepted_msg": "🎉 **Terms of Service Accepted!**\n\nYou can now use the bot. Send /start to open the dashboard.",
         "tos_blocked_msg": "⚠️ You must accept the Terms of Service to use the bot.",
         
-        "main_menu": "🤖 **UserBot Manager Dashboard**\n\nManage your personal Telegram accounts and configure automation tasks.\n\nAllowed Slots: **{allowed}** | Used Slots: **{used}**\n\n⚠️ **Note: To see and use all advertisement features, please add/login your account first!**",
+        "main_menu": "🤖 **UserBot Manager Dashboard**\n━━━━━━━━━━━━━━━━━━━━\nManage your personal Telegram accounts and configure automation tasks.\n\n📊 **Your Slot Stats**:\n• Allowed Slots: **{allowed}**\n• Used Slots: **{used}**\n\n⚠️ *Note: To see and use all advertisement features, please add/login your account first!*",
         "btn_add_bot": "➕ Add Bot",
         "btn_my_bots": "📱 My Bots",
         "btn_settings": "⚙️ Settings",
@@ -33,7 +33,7 @@ TRANSLATIONS = {
         "login_failed": "❌ Login failed: {error}",
         
         # Session Dashboard
-        "bot_dashboard": "🤖 **UserBot Dashboard**: {name} (@{username})\nStatus: {status_emoji} **{status}**\n\n__Choose an option below to manage this bot's services:__",
+        "bot_dashboard": "🤖 **UserBot Dashboard**: {name} (@{username})\n━━━━━━━━━━━━━━━━━━━━\n• Status: {status_emoji} **{status}**\n\n__Choose an option below to manage this bot's services:__",
         "btn_start_bot": "🟢 Start UserBot",
         "btn_stop_bot": "🔴 Stop UserBot",
         "btn_set_broadcast": "✉️ Set Broadcast Msg",
@@ -108,6 +108,13 @@ TRANSLATIONS = {
         "help_interval_val": "ℹ️ Select {val} seconds delay.",
         "help_interval_custom": "ℹ️ Enter a custom delay time manually.",
         
+        # Inter-group delay
+        "btn_set_inter_delay": "⏱️ Set Inter-Group Delay",
+        "inter_delay_title": "⏱️ **Set Inter-Group Delay**\n\nSelect the delay between sending messages to different groups:\n⚠️ Higher delay (e.g., 5-10s) decreases the risk of Spambot limits!",
+        "prompt_custom_inter_delay": "⏱️ Enter custom inter-group delay in seconds (minimum 2s, maximum 60s):",
+        "inter_delay_updated": "✅ Inter-Group Delay updated to **{val}s**!",
+        "inter_delay_invalid": "❌ Invalid delay. Please input a number between 2 and 60.",
+        
         # Stats
         "stats_refreshed": "✅ Stats refreshed! Groups: {groups} | Users: {users}",
         
@@ -157,19 +164,28 @@ TRANSLATIONS = {
         "btn_clone_profile": "👤 Clone Profile",
         "btn_help": "❓ Help",
         "btn_how_to_use": "📖 How to Use",
-        "help_dashboard_text": "❓ **UserBot Help Guide**\n\n- **Start UserBot**: Activates the automation scripts.\n- **Stop UserBot**: Deactivates the scripts.\n- **Set Broadcast Msg**: Configures the message broadcasted to groups.\n- **Set Welcome Msg**: Configures the welcome message sent to new PMs.\n- **Auto-Spam**: Toggles automatic group broadcasting.\n- **Auto-Welcome**: Toggles welcoming new PMs.\n- **Clone Profile**: Copy name, bio, and profile picture of another user.\n\n💬 **Support**: If you face any issues, please contact the owner: @v90001",
-        "how_to_use_text": "📖 **How to Use Guide**\n\n1. **Link Account**: Click **Add Bot** or dashboard login button. Enter phone number, then verify with the OTP sent on your Telegram app. If 2FA is active, enter password.\n2. **Configure Settings**: Go to **Set Broadcast Msg** and **Set Welcome Msg** to set your automation texts.\n3. **Start Service**: Click **Start UserBot** to start.\n4. **Automate**: Turn on **Auto-Spam** (broadcast loop) or **Auto-Welcome** to automatically welcome new PMs.\n5. **Clone Profile**: Click **Clone Profile** and enter target's username or user ID to instantly copy their name, profile picture, and bio.\n6. **Refer & Earn**: Click **Refer & Earn** to get your link. Share it with friends to earn ₹1 per join, and use balance to buy slot plans!"
+        "help_dashboard_text": "❓ **UserBot Help Guide**\n━━━━━━━━━━━━━━━━━━━━\n• **Start UserBot**: Activates the automation scripts.\n• **Stop UserBot**: Deactivates the scripts.\n• **Set Broadcast Msg**: Configures the message broadcasted to groups.\n• **Set Welcome Msg**: Configures the welcome message sent to new PMs.\n• **Auto-Spam**: Toggles automatic group broadcasting.\n• **Auto-Welcome**: Toggles welcoming new PMs.\n• **Clone Profile**: Copy name, bio, and profile picture of another user.\n\n💬 **Support**: If you face any issues, please contact the owner: @v90001",
+        "how_to_use_text": "📖 **How to Use Guide**\n━━━━━━━━━━━━━━━━━━━━\n1. **Link Account**: Click **Add Bot** or dashboard login button. Enter phone number, then verify with the OTP sent on your Telegram app. If 2FA is active, enter password.\n2. **Configure Settings**: Go to **Set Broadcast Msg** and **Set Welcome Msg** to set your automation texts.\n3. **Start Service**: Click **Start UserBot** to start.\n4. **Automate**: Turn on **Auto-Spam** (broadcast loop) or **Auto-Welcome** to automatically welcome new PMs.\n5. **Clone Profile**: Click **Clone Profile** and enter target's username or user ID to instantly copy their name, profile picture, and bio.\n6. **Refer & Earn**: Click **Refer & Earn** to get your link. Share it with friends to earn ₹1 per join, and use balance to buy slot plans!",
+        "btn_vc_join": "🎙️ Join VC",
+        "prompt_vc_link": "🎙️ Send the Group/Channel Link or Username to join the voice chat (VC):",
+        "btn_all_slots": "👥 All Slots Dashboard",
+        "prompt_all_vc_link": "🎙️ Send the Group/Channel Link or Username to make all running userbots join the voice chat (VC):",
+        "prompt_all_broadcast": "✉️ Send the new broadcast message for ALL your userbots:",
+        "prompt_all_welcome": "👋 Send the new welcome message for ALL your userbots:",
+        "btn_vc_leave": "🔴 Leave VC",
+        "btn_play_song": "🎵 Play Song",
+        "btn_vc_menu": "🎙️ Voice Chat Menu"
     },
     
     "hi": {
         "select_lang": "📱 Please select your language / कृपया अपनी भाषा चुनें / Пожалуйста, выберите язык:",
         "tos_title": "⚠️ सेवा की शर्तें",
-        "tos_text": "⚠️ **अस्वीकरण और सेवा की शर्तें**\n\n1. यह बॉट व्यक्तिगत टेलीग्राम खातों को स्वचालित करने का एक उपकरण है।\n2. स्वचालित कार्य (जैसे स्पैम या तीव्र प्रसारण) चलाना टेलीग्राम की सेवा शर्तों का उल्लंघन करता है और इसके परिणामस्वरूप आपका खाता **प्रतिबंधित (banned)** या **फ्रोजन** हो सकता है।\n3. बॉट मालिक और डेवलपर आपके खाते पर किसी भी प्रतिबंध, डेटा हानि या की गई कार्रवाई के लिए जिम्मेदार नहीं हैं।\n4. इसे अपने जोखिम पर उपयोग करें।\n\nआगे बढ़ने के लिए क्या आप इन शर्तों को स्वीकार करते हैं?",
+        "tos_text": "⚠️ **अस्वीकरण और सेवा की शर्तें**\n━━━━━━━━━━━━━━━━━━━━\n> 1. यह बॉट व्यक्तिगत टेलीग्राम खातों को स्वचालित करने का एक उपकरण है।\n> 2. स्वचालित कार्य (जैसे स्पैम या तीव्र प्रसारण) चलाना टेलीग्राम की सेवा शर्तों का उल्लंघन करता है और इसके परिणामस्वरूप आपका खाता **प्रतिबंधित (banned)** या **फ्रोजन** हो सकता है।\n> 3. बॉट मालिक और डेवलपर आपके खाते पर किसी भी प्रतिबंध, डेटा हानि या की गई कार्रवाई के लिए जिम्मेदार नहीं हैं।\n> 4. इसे अपने जोखिम पर उपयोग करें।\n\nआगे बढ़ने के लिए क्या आप इन शर्तों को स्वीकार करते हैं?",
         "tos_accept_btn": "✅ स्वीकार करें और आगे बढ़ें",
         "tos_accepted_msg": "🎉 **सेवा की शर्तें स्वीकार कर ली गई हैं!**\n\nअब आप बॉट का उपयोग कर सकते हैं। मुख्य मेनू देखने के लिए /start भेजें।",
         "tos_blocked_msg": "⚠️ बॉट का उपयोग करने के लिए आपको सेवा की शर्तों को स्वीकार करना होगा।",
         
-        "main_menu": "🤖 **यूज़रबॉट प्रबंधक डैशबोर्ड**\n\nअपने व्यक्तिगत टेलीग्राम खातों को प्रबंधित करें और स्वचालन सेट करें।\n\nअनुमत स्लॉट: **{allowed}** | उपयोग किए गए स्लॉट: **{used}**\n\n⚠️ **नोट: सभी विज्ञापन सुविधाओं को जानने और उपयोग करने के लिए, कृपया पहले अपना खाता जोड़ें/लॉगिन करें!**",
+        "main_menu": "🤖 **यूज़रबॉट प्रबंधक डैशबोर्ड**\n━━━━━━━━━━━━━━━━━━━━\nअपने व्यक्तिगत टेलीग्राम खातों को प्रबंधित करें और स्वचालन सेट करें।\n\n📊 **आपके स्लॉट आँकड़े**:\n• कुल स्लॉट सीमा: **{allowed}**\n• उपयोग किए गए स्लॉट: **{used}**\n\n⚠️ *नोट: सभी विज्ञापन सुविधाओं को देखने और उपयोग करने के लिए, कृपया पहले अपना खाता जोड़ें/लॉगिन करें!*",
         "btn_add_bot": "➕ बॉट जोड़ें",
         "btn_my_bots": "📱 मेरे बॉट्स",
         "btn_settings": "⚙️ सेटिंग्स",
@@ -195,7 +211,7 @@ TRANSLATIONS = {
         "login_failed": "❌ लॉगिन विफल रहा: {error}",
         
         # Session Dashboard
-        "bot_dashboard": "🤖 **यूज़रबॉट डैशबोर्ड**: {name} (@{username})\nस्थिति: {status_emoji} **{status}**\n\n__इस बॉट की सेवाओं को प्रबंधित करने के लिए नीचे एक विकल्प चुनें:__",
+        "bot_dashboard": "🤖 **यूज़रबॉट डैशबोर्ड**: {name} (@{username})\n━━━━━━━━━━━━━━━━━━━━\n• स्थिति: {status_emoji} **{status}**\n\n__इस बॉट की सेवाओं को प्रबंधित करने के लिए नीचे एक विकल्प चुनें:__",
         "btn_start_bot": "🟢 यूज़रबॉट शुरू करें",
         "btn_stop_bot": "🔴 यूज़रबॉट रोकें",
         "btn_set_broadcast": "✉️ प्रसारण संदेश सेट करें",
@@ -270,6 +286,13 @@ TRANSLATIONS = {
         "help_interval_val": "ℹ️ {val} सेकंड का विलंब चुनें।",
         "help_interval_custom": "ℹ️ मैन्युअल रूप से कस्टम विलंब समय दर्ज करें।",
         
+        # Inter-group delay
+        "btn_set_inter_delay": "⏱️ ग्रुप्स के बीच विलंब सेट करें",
+        "inter_delay_title": "⏱️ **ग्रुप्स के बीच विलंब सेट करें**\n\nएक ग्रुप से दूसरे ग्रुप में मैसेज भेजने के बीच का विलंब चुनें:\n⚠️ अधिक विलंब (जैसे 5-10s) स्पैमबॉट लिमिट के खतरे को कम करता है!",
+        "prompt_custom_inter_delay": "⏱️ सेकंड में कस्टम विलंब दर्ज करें (न्यूनतम 2s, अधिकतम 60s):",
+        "inter_delay_updated": "✅ ग्रुप्स के बीच का विलंब **{val}s** पर अपडेट किया गया!",
+        "inter_delay_invalid": "❌ अमान्य विलंब। कृपया 2 से 60 के बीच की संख्या दर्ज करें।",
+        
         # Stats
         "stats_refreshed": "✅ आँकड़े ताज़ा हुए! समूह: {groups} | उपयोगकर्ता: {users}",
         
@@ -319,8 +342,17 @@ TRANSLATIONS = {
         "btn_clone_profile": "👤 क्लोन प्रोफाइल",
         "btn_help": "❓ सहायता",
         "btn_how_to_use": "📖 उपयोग कैसे करें",
-        "help_dashboard_text": "❓ **यूज़रबॉट सहायता गाइड**\n\n- **बॉट शुरू करें**: स्वचालन स्क्रिप्ट सक्रिय करें।\n- **बॉट रोकें**: स्क्रिप्ट निष्क्रिय करें।\n- **प्रसारण संदेश**: समूहों में भेजा जाने वाला संदेश सेट करें।\n- **स्वागत संदेश**: नए उपयोगकर्ताओं को भेजा जाने वाला संदेश सेट करें।\n- **ऑटो-स्पैम**: स्वचालित समूह प्रसारण चालू/बंद करें।\n- **ऑटो-वेलकम**: नए संदेशों का स्वागत चालू/बंद करें।\n- **क्लोन प्रोफाइल**: किसी अन्य उपयोगकर्ता का नाम, बायो और प्रोफ़ाइल चित्र कॉपी करें।\n\n💬 **सहायता**: यदि आपको कोई समस्या आती है, तो कृपया स्वामी से संपर्क करें: @v90001",
-        "how_to_use_text": "📖 **उपयोग कैसे करें गाइड**\n\n1. **खाता जोड़ें**: **बॉट जोड़ें** पर क्लिक करें। अपना फ़ोन नंबर दर्ज करें, फिर अपने टेलीग्राम ऐप पर भेजे गए ओटीपी से सत्यापित करें। यदि 2FA सक्रिय है, तो पासवर्ड दर्ज करें।\n2. **कॉन्फ़िगर करें**: अपना स्वचालन पाठ सेट करने के लिए **प्रसारण संदेश** और **स्वागत संदेश** पर जाएं।\n3. **सेवा शुरू करें**: काम शुरू करने के लिए **यूज़रबॉट शुरू करें** पर क्लिक करें।\n4. **स्वचालित करें**: समूहों में संदेश भेजने के लिए **ऑटो-स्पैम** या नए व्यक्तिगत संदेशों का स्वागत करने के लिए **ऑटो-वेलकम** चालू करें।\n5. **प्रोफ़ाइल क्लोन**: **क्लोन प्रोफ़ाइल** पर क्लिक करें और किसी का नाम, प्रोफ़ाइल चित्र और बायो कॉपी करने के लिए उसका यूज़रनेम या यूज़र आईडी दर्ज करें।\n6. **रेफर और कमाएं**: अपना लिंक प्राप्त करने के लिए **रेफर और कमाएं** पर क्लिक करें। दोस्तों के साथ साझा करें और प्रत्येक जोड़ पर ₹1 कमाएं, इस राशि का उपयोग नए स्लॉट खरीदने के लिए करें!"
+        "help_dashboard_text": "❓ **यूज़रबॉट सहायता गाइड**\n━━━━━━━━━━━━━━━━━━━━\n• **बॉट शुरू करें**: स्वचालन स्क्रिप्ट सक्रिय करें।\n• **बॉट रोकें**: स्क्रिप्ट निष्क्रिय करें।\n• **प्रसारण संदेश**: समूहों में भेजा जाने वाला संदेश सेट करें।\n• **स्वागत संदेश**: नए उपयोगकर्ताओं को भेजा जाने वाला संदेश सेट करें।\n• **ऑटो-स्पैम**: स्वचालित समूह प्रसारण चालू/बंद करें।\n• **ऑटो-वेलकम**: नए संदेशों का स्वागत चालू/बंद करें।\n• **क्लोन प्रोफाइल**: किसी अन्य उपयोगकर्ता का नाम, बायो और प्रोफ़ाइल चित्र कॉपी करें।\n\n💬 **सहायता**: यदि आपको कोई समस्या आती है, तो कृपया स्वामी से संपर्क करें: @v90001",
+        "how_to_use_text": "📖 **उपयोग कैसे करें गाइड**\n━━━━━━━━━━━━━━━━━━━━\n1. **खाता जोड़ें**: **बॉट जोड़ें** पर क्लिक करें। अपना फ़ोन नंबर दर्ज करें, फिर अपने टेलीग्राम ऐप पर भेजे गए ओटीपी से सत्यापित करें। यदि 2FA सक्रिय है, तो पासवर्ड दर्ज करें।\n2. **कॉन्फ़िगर करें**: अपना स्वचालन पाठ सेट करने के लिए **प्रसारण संदेश** और **स्वागत संदेश** पर जाएं।\n3. **सेवा शुरू करें**: काम शुरू करने के लिए **यूज़रबॉट शुरू करें** पर क्लिक करें।\n4. **स्वचालित करें**: समूहों में संदेश भेजने के लिए **ऑटो-स्पैम** या नए व्यक्तिगत संदेशों का स्वागत करने के लिए **ऑटो-वेलकम** चालू करें।\n5. **प्रोफ़ाइल क्लोन**: **क्लोन प्रोफ़ाइल** पर क्लिक करें और किसी का नाम, प्रोफ़ाइल चित्र और बायो कॉपी करने के लिए उसका यूज़रनेम या यूज़र आईडी दर्ज करें।\n6. **रेफर और कमाएं**: अपना लिंक प्राप्त करने के लिए **रेफर और कमाएं** पर क्लिक करें। दोस्तों के साथ साझा करें और प्रत्येक जोड़ पर ₹1 कमाएं, इस राशि का उपयोग नए स्लॉट खरीदने के लिए करें!",
+        "btn_vc_join": "🎙️ VC में शामिल हों",
+        "prompt_vc_link": "🎙️ वॉयस चैट (VC) में शामिल होने के लिए ग्रुप/चैनल लिंक या यूज़रनेम भेजें:",
+        "btn_all_slots": "👥 सभी स्लॉट डैशबोर्ड",
+        "prompt_all_vc_link": "🎙️ सभी सक्रिय यूज़रबॉट्स को वॉयस चैट (VC) में शामिल करने के लिए ग्रुप/चैनल लिंक या यूज़रनेम भेजें:",
+        "prompt_all_broadcast": "✉️ अपने सभी यूज़रबॉट्स के लिए नया प्रसारण संदेश भेजें:",
+        "prompt_all_welcome": "👋 अपने सभी यूज़रबॉट्स के लिए नया स्वागत संदेश भेजें:",
+        "btn_vc_leave": "🔴 VC छोड़ें",
+        "btn_play_song": "🎵 गाना बजाएं",
+        "btn_vc_menu": "🎙️ वॉयस चैट मेनू"
     },
     
     "ru": {
