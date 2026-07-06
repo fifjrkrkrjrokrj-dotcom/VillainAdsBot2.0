@@ -69,20 +69,12 @@ def register_handlers(client):
                 logger.error(f"Error cleaning up states on callback: {cleanup_err}")
                 
             # Show the translation help text popup
-            await utils.show_help(event, action, user_id)
-            
-            # Answer the query if not already answered to clear the client loading spinner
-            try:
-                await event.answer()
-            except Exception:
-                pass
+            shown = await utils.show_help(event, action, user_id)
+            if shown:
+                return
         except events.StopPropagation:
             raise
         except Exception as e:
             logger.error(f"Error in global callback help handler: {e}")
-            try:
-                await event.answer()
-            except Exception:
-                pass
 
             # Do not raise events.StopPropagation so other matching callback handlers can still fire.

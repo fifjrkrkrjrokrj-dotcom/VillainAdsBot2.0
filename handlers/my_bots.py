@@ -394,7 +394,10 @@ def register_handlers(client):
         
         bot_obj = userbot_manager._running_bots.get(phone)
         if not bot_obj:
-            await event.answer("⚠️ Userbot is not running.", alert=True)
+            try:
+                await event.answer("⚠️ Userbot is not running.", alert=True)
+            except Exception:
+                pass
             return
             
         vc_chat_id = getattr(bot_obj, "current_vc_chat_id", None)
@@ -439,7 +442,10 @@ def register_handlers(client):
         sessions = database.get_sessions(user_id)
         running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
         if not running_phones:
-            await event.answer("⚠️ Please start at least one userbot first!", alert=True)
+            try:
+                await event.answer("⚠️ Please start at least one userbot first!", alert=True)
+            except Exception:
+                pass
             return
             
         vc_connected_count = sum(

@@ -40,7 +40,7 @@ def get_text(key: str, lang: Optional[str] = "en", **kwargs) -> str:
         logger.error(f"Formatting error for translation key '{key}': {e}")
         return text
 
-async def show_help(event, action_key: str, user_id: int):
+async def show_help(event, action_key: str, user_id: int) -> bool:
     """
     Displays the 'How to Use' hint for a button click.
     Uses event.answer(text, alert=...) to present a popup to the user.
@@ -54,7 +54,7 @@ async def show_help(event, action_key: str, user_id: int):
     
     # Fallback to generic message if missing
     if hint.startswith(f"[help_"):
-        return
+        return False
         
     # Determine alert level: alert=True for risky/important actions, False for subtle
     show_alert = False
@@ -64,8 +64,10 @@ async def show_help(event, action_key: str, user_id: int):
         
     try:
         await event.answer(hint, alert=show_alert)
+        return True
     except Exception as e:
         logger.error(f"Failed to show callback help alert: {e}")
+        return False
 
 def ensure_user_dir(user_id: int) -> str:
     """
