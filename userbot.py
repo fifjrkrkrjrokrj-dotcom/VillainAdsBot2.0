@@ -115,23 +115,77 @@ async def download_media(query: str, download_type: str = "audio") -> tuple:
         if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
             return file_path, title, duration_sec, thumb
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{API_URL}/download",
-                params={
-                    "url": youtube_url,
-                    "type": download_type,
-                    "api_key": API_KEY
-                },
-                timeout=aiohttp.ClientTimeout(total=600)
-            ) as resp:
-                if resp.status != 200:
-                    raise Exception("API Download Failed")
-                with open(file_path, "wb") as f:
-                    async for chunk in resp.content.iter_chunked(1024 * 128):
-                        f.write(chunk)
-
-        return file_path, title, duration_sec, thumb
+        # Use local yt-dlp directly for video since remote API returns 503
+        use_local = (download_type == "video")
+        
+        if not use_local:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(
+                        f"{API_URL}/download",
+                        params={
+                            "url": youtube_url,
+                            "type": download_type,
+                            "api_key": API_KEY
+                        },
+                        timeout=aiohttp.ClientTimeout(total=300)
+                    ) as resp:
+                        if resp.status == 200:
+                            with open(file_path, "wb") as f:
+                                async for chunk in resp.content.iter_chunked(1024 * 128):
+                                    f.write(chunk)
+                            logger.info(f"Downloaded audio via remote API for: {title}")
+                            return file_path, title, duration_sec, thumb
+                        else:
+                            logger.warning(f"Remote download API failed with status {resp.status}, falling back to local yt-dlp.")
+                            use_local = True
+            except Exception as api_err:
+                logger.warning(f"Remote API download exception: {api_err}, falling back to local yt-dlp.")
+                use_local = True
+                
+        if use_local:
+            import yt_dlp
+            logger.info(f"Downloading {download_type} locally using yt-dlp for: {title}...")
+            
+            def _dl_sync():
+                try:
+                    if download_type == "audio":
+                        ydl_opts = {
+                            'format': 'bestaudio/best',
+                            'outtmpl': file_path.replace('.mp3', '.%(ext)s'),
+                            'postprocessors': [{
+                                'key': 'FFmpegExtractAudio',
+                                'preferredcodec': 'mp3',
+                                'preferredquality': '192',
+                            }],
+                            'quiet': True,
+                            'no_warnings': True,
+                        }
+                        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                            ydl.download([youtube_url])
+                        return os.path.exists(file_path)
+                    else:
+                        ydl_opts = {
+                            'format': 'best[ext=mp4]/best',
+                            'outtmpl': file_path,
+                            'quiet': True,
+                            'no_warnings': True,
+                        }
+                        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                            ydl.download([youtube_url])
+                        return os.path.exists(file_path)
+                except Exception as dl_ex:
+                    logger.error(f"yt-dlp sync download exception: {dl_ex}")
+                    return False
+                    
+            loop = asyncio.get_running_loop()
+            success = await loop.run_in_executor(None, _dl_sync)
+            if success:
+                logger.info(f"Successfully downloaded {download_type} locally using yt-dlp.")
+                return file_path, title, duration_sec, thumb
+            else:
+                logger.error(f"Local yt-dlp download failed.")
+                return None, None, None, None
     except Exception as e:
         logger.error(f"Download media error: {e}")
         return None, None, None, None
