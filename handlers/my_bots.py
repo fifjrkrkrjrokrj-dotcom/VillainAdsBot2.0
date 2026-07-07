@@ -46,29 +46,38 @@ def extract_media_info(msg):
     return media, title, duration
 
 import time
-async def download_progress(current, total, msg_to_edit, operation_name="Downloading"):
-    percent = (current / total) * 100 if total else 0.0
-    filled = int(percent / 10)
-    bar = "█" * filled + "░" * (10 - filled)
-    
-    # Limit update frequency to avoid Flood Wait (max 1 update per 1.5 seconds)
+
+_last_progress_updates = {}
+
+def download_progress_sync(current, total, msg_to_edit, operation_name="Downloading"):
     now = time.time()
-    last_update = getattr(msg_to_edit, "_last_progress_time", 0)
-    if now - last_update < 1.5 and percent < 100.0:
+    msg_id = id(msg_to_edit)
+    last_time = _last_progress_updates.get(msg_id, 0.0)
+    
+    percent = (current / total) * 100 if total else 0.0
+    
+    # Only update at most once every 3.0 seconds to prevent Telegram Flood Wait
+    if now - last_time < 3.0 and percent < 100.0:
         return
         
-    msg_to_edit._last_progress_time = now
+    _last_progress_updates[msg_id] = now
     
-    text = (
-        f"📥 **{operation_name}...**\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"📁 Size: `{total / (1024*1024):.2f} MB`\n"
-        f"📊 Progress: `[{bar}] {percent:.1f}%`"
-    )
-    try:
-        await msg_to_edit.edit(text)
-    except Exception:
-        pass
+    # Define an async task to edit the message safely on the main loop
+    async def _do_edit():
+        filled = int(percent / 10)
+        bar = "█" * filled + "░" * (10 - filled)
+        text = (
+            f"📥 **{operation_name}...**\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"📁 Size: `{total / (1024*1024):.2f} MB`\n"
+            f"📊 Progress: `[{bar}] {percent:.1f}%`"
+        )
+        try:
+            await msg_to_edit.edit(text)
+        except Exception:
+            pass
+            
+    asyncio.create_task(_do_edit())
 
 # In-memory dictionary containing active prompt states for user interaction
 # Structure: { user_id: { "phone": str, "action": str } }
@@ -2021,14 +2030,11 @@ def register_handlers(client):
                 if media_obj:
                     replied_audio = reply_msg
                     progress_download = await event.reply("📥 **Downloading replied media file...**\n━━━━━━━━━━━━━━━━━━━━\n📊 Progress: `[░░░░░░░░░░] 0.0%`")
-                    os.makedirs("downloads", exist_ok=True)
                     try:
                         local_file_path = await client.download_media(
                             replied_audio, 
                             file="downloads/",
-                            progress_callback=lambda c, t: asyncio.create_task(
-                                download_progress(c, t, progress_download, "Downloading replied media file")
-                            )
+                            progress_callback=lambda c, t: download_progress_sync(c, t, progress_download, "Downloading replied media file")
                         )
                     except Exception as dl_err:
                         logger.error(f"Failed to download replied media: {dl_err}")
@@ -2363,9 +2369,7 @@ def register_handlers(client):
                     local_file_path = await client.download_media(
                         event.message, 
                         file="downloads/",
-                        progress_callback=lambda c, t: asyncio.create_task(
-                            download_progress(c, t, progress_msg, "Downloading uploaded media")
-                        )
+                        progress_callback=lambda c, t: download_progress_sync(c, t, progress_msg, "Downloading uploaded media")
                     )
                 except Exception as dl_err:
                     logger.error(f"Failed to download media: {dl_err}")
@@ -2631,9 +2635,7 @@ def register_handlers(client):
                     local_file_path = await client.download_media(
                         event.message, 
                         file="downloads/",
-                        progress_callback=lambda c, t: asyncio.create_task(
-                            download_progress(c, t, progress_msg, "Downloading uploaded media")
-                        )
+                        progress_callback=lambda c, t: download_progress_sync(c, t, progress_msg, "Downloading uploaded media")
                     )
                 except Exception as dl_err:
                     logger.error(f"Failed to download media: {dl_err}")
