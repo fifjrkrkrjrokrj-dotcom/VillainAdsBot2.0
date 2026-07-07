@@ -37,30 +37,30 @@ FAMAPP_EMAILS = [x.strip() for x in os.getenv("FAMAPP_EMAILS", "no-reply@famapp.
 
 # Default values for global settings
 DEFAULT_GLOBAL_SETTINGS = {
-    "price_per_id": 10.0,            # Global price per extra ID
-    "force_join_links": [],           # List of usernames/links to force join
-    "log_group_id": -1004354441869,   # Log group/channel ID
-    "branding_username": None,        # Bot username to append (e.g. via @MyBot)
-    "branding_duration": 30,          # Duration of branding in days
-    "branding_name_enabled": True,    # Enable name branding
-    "branding_bio_enabled": True,     # Enable bio branding
-    "branding_name_text": None,       # Custom name branding suffix text
-    "branding_bio_text": None,        # Custom bio branding suffix text
-    "start_image": "https://files.catbox.moe/jnlroe.jpg",              # File ID of the start image
-    "ping_image": "https://files.catbox.moe/7qgokb.jpg",               # File ID of the ping image
-    "help_image": "https://files.catbox.moe/xxpn14.jpg",               # File ID of the help image
+    "price_per_id": float(os.getenv("PRICE_PER_ID", "10.0")),            # Global price per extra ID
+    "force_join_links": [x.strip() for x in os.getenv("FORCE_JOIN_LINKS", "").split(",") if x.strip()], # List of usernames/links to force join
+    "log_group_id": int(os.getenv("LOG_GROUP_ID", "-1004354441869")),   # Log group/channel ID
+    "branding_username": os.getenv("BRANDING_USERNAME", None),        # Bot username to append (e.g. via @MyBot)
+    "branding_duration": int(os.getenv("BRANDING_DURATION", "30")),          # Duration of branding in days
+    "branding_name_enabled": os.getenv("BRANDING_NAME_ENABLED", "True").lower() == "true",    # Enable name branding
+    "branding_bio_enabled": os.getenv("BRANDING_BIO_ENABLED", "True").lower() == "true",     # Enable bio branding
+    "branding_name_text": os.getenv("BRANDING_NAME_TEXT", None),       # Custom name branding suffix text
+    "branding_bio_text": os.getenv("BRANDING_BIO_TEXT", None),        # Custom bio branding suffix text
+    "start_image": os.getenv("START_IMAGE", "https://files.catbox.moe/jnlroe.jpg"),              # File ID of the start image
+    "ping_image": os.getenv("PING_IMAGE", "https://files.catbox.moe/7qgokb.jpg"),               # File ID of the ping image
+    "help_image": os.getenv("HELP_IMAGE", "https://files.catbox.moe/xxpn14.jpg"),               # File ID of the help image
     "admins": list(ORIGINAL_ADMIN_IDS), # List of admins
-    "gpt_api_key": None,               # Global OpenAI API Key for GPT mode (optional)
-    "maintenance_mode": False,         # Maintenance guard
-    "upi_id": "raunitkumar01@fam",          # Admin UPI ID for payments
-    "usdt_bep20_address": "0x0000000000000000000000000000000000000000", # USDT BEP20 Address
-    "ton_address": "UQ000000000000000000000000000000000000000000000000", # TON Address
-    "support_channel": "https://t.me/+Qzy2vnoy3g00OTE1",                 # Support channel invite link
-    "support_group": "https://t.me/+DlgFzulC_JY5OWI1",                   # Support group invite link
-    "userbot_auto_join_links": [],                                       # Auto-join links for new userbots
-    "referral_commission": 0.10,        # 10% commission on slot upgrades
+    "gpt_api_key": os.getenv("GPT_API_KEY", None),               # Global OpenAI API Key for GPT mode (optional)
+    "maintenance_mode": os.getenv("MAINTENANCE_MODE", "False").lower() == "true",         # Maintenance guard
+    "upi_id": os.getenv("UPI_ID", "raunitkumar01@fam"),          # Admin UPI ID for payments
+    "usdt_bep20_address": os.getenv("USDT_BEP20_ADDRESS", "0x0000000000000000000000000000000000000000"), # USDT BEP20 Address
+    "ton_address": os.getenv("TON_ADDRESS", "UQ000000000000000000000000000000000000000000000000"), # TON Address
+    "support_channel": os.getenv("SUPPORT_CHANNEL", "https://t.me/+Qzy2vnoy3g00OTE1"),                 # Support channel invite link
+    "support_group": os.getenv("SUPPORT_GROUP", "https://t.me/+DlgFzulC_JY5OWI1"),                   # Support group invite link
+    "userbot_auto_join_links": [x.strip() for x in os.getenv("USERBOT_AUTO_JOIN_LINKS", "").split(",") if x.strip()], # Auto-join links for new userbots
+    "referral_commission": float(os.getenv("REFERRAL_COMMISSION", "0.10")),        # 10% commission on slot upgrades
     "subscription_plans": [             # Dynamic slot subscription plans
-        {"id": "std30", "days": 30, "price": 10.0, "button_name": "Standard 30 Days"}
+        {"id": "std30", "days": 30, "price": float(os.getenv("PRICE_PER_ID", "10.0")), "button_name": "Standard 30 Days"}
     ]
 }
 
