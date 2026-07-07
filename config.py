@@ -65,7 +65,7 @@ DEFAULT_GLOBAL_SETTINGS = {
 }
 
 # Owner Button Configuration (Read from Env)
-OWNER_1_NAME = os.getenv("OWNER_1_NAME", "👑 Owner 1")
-OWNER_1_URL = os.getenv("OWNER_1_URL", "https://t.me/v90001")
-OWNER_2_NAME = os.getenv("OWNER_2_NAME", "👑 Owner 2")
-OWNER_2_URL = os.getenv("OWNER_2_URL", "https://t.me/BL4ZEXSOUL")
+OWNER_1_NAME = os.getenv("OWNER_1_NAME") or os.getenv("owner_1_name") or "👑 Owner 1"
+OWNER_1_URL = os.getenv("OWNER_1_URL") or os.getenv("owner_1_url") or "https://t.me/v90001"
+OWNER_2_NAME = os.getenv("OWNER_2_NAME") or os.getenv("owner_2_name") or "👑 Owner 2"
+OWNER_2_URL = os.getenv("OWNER_2_URL") or os.getenv("owner_2_url") or "https://t.me/BL4ZEXSOUL"
