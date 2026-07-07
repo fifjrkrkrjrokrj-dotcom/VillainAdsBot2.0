@@ -18,8 +18,8 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 # MongoDB connection URI
 MONGODB_URI = os.getenv("MONGODB_URI", "")
 
-# Parse original admin IDs (which cannot be removed)
-original_admin_ids_str = os.getenv("ORIGINAL_ADMIN_IDS", "")
+# Parse original admin IDs (which can be whitelisted using ORIGINAL_ADMIN_IDS or OWNER_ID)
+original_admin_ids_str = os.getenv("ORIGINAL_ADMIN_IDS") or os.getenv("original_admin_ids") or os.getenv("OWNER_ID") or os.getenv("owner_id") or ""
 ORIGINAL_ADMIN_IDS = set()
 if original_admin_ids_str:
     for x in original_admin_ids_str.split(","):
@@ -55,8 +55,8 @@ DEFAULT_GLOBAL_SETTINGS = {
     "upi_id": os.getenv("UPI_ID", "raunitkumar01@fam"),          # Admin UPI ID for payments
     "usdt_bep20_address": os.getenv("USDT_BEP20_ADDRESS", "0x0000000000000000000000000000000000000000"), # USDT BEP20 Address
     "ton_address": os.getenv("TON_ADDRESS", "UQ000000000000000000000000000000000000000000000000"), # TON Address
-    "support_channel": os.getenv("SUPPORT_CHANNEL", "https://t.me/+Qzy2vnoy3g00OTE1"),                 # Support channel invite link
-    "support_group": os.getenv("SUPPORT_GROUP", "https://t.me/+DlgFzulC_JY5OWI1"),                   # Support group invite link
+    "support_channel": os.getenv("SUPPORT_CHANNEL") or os.getenv("support_channel") or "https://t.me/+Qzy2vnoy3g00OTE1",                 # Support channel invite link
+    "support_group": os.getenv("SUPPORT_GROUP") or os.getenv("support_group") or "https://t.me/+DlgFzulC_JY5OWI1",                   # Support group invite link
     "userbot_auto_join_links": [x.strip() for x in os.getenv("USERBOT_AUTO_JOIN_LINKS", "").split(",") if x.strip()], # Auto-join links for new userbots
     "referral_commission": float(os.getenv("REFERRAL_COMMISSION", "0.10")),        # 10% commission on slot upgrades
     "subscription_plans": [             # Dynamic slot subscription plans
