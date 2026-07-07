@@ -45,6 +45,31 @@ def extract_media_info(msg):
             
     return media, title, duration
 
+import time
+async def download_progress(current, total, msg_to_edit, operation_name="Downloading"):
+    percent = (current / total) * 100 if total else 0.0
+    filled = int(percent / 10)
+    bar = "█" * filled + "░" * (10 - filled)
+    
+    # Limit update frequency to avoid Flood Wait (max 1 update per 1.5 seconds)
+    now = time.time()
+    last_update = getattr(msg_to_edit, "_last_progress_time", 0)
+    if now - last_update < 1.5 and percent < 100.0:
+        return
+        
+    msg_to_edit._last_progress_time = now
+    
+    text = (
+        f"📥 **{operation_name}...**\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"📁 Size: `{total / (1024*1024):.2f} MB`\n"
+        f"📊 Progress: `[{bar}] {percent:.1f}%`"
+    )
+    try:
+        await msg_to_edit.edit(text)
+    except Exception:
+        pass
+
 # In-memory dictionary containing active prompt states for user interaction
 # Structure: { user_id: { "phone": str, "action": str } }
 _bot_action_states = {}
@@ -1977,6 +2002,13 @@ def register_handlers(client):
             cmd = parts[0].lower()
             query = parts[1].strip() if len(parts) > 1 else ""
             
+            # Retrieve sessions first to prevent NameError
+            sessions = database.get_sessions(user_id)
+            if not sessions:
+                await event.reply("❌ You do not have any userbot slots.")
+                return
+            running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
+            
             # Check reply for audio
             replied_audio = None
             local_file_path = None
@@ -1988,7 +2020,7 @@ def register_handlers(client):
                 media_obj, audio_title, audio_duration = extract_media_info(reply_msg)
                 if media_obj:
                     replied_audio = reply_msg
-                    progress_download = await event.reply("📥 **Downloading replied media file...**")
+                    progress_download = await event.reply("📥 **Downloading replied media file...**\n━━━━━━━━━━━━━━━━━━━━\n📊 Progress: `[░░░░░░░░░░] 0.0%`")
                     os.makedirs("downloads", exist_ok=True)
                     
                     # Resolve first running userbot client to download 10x faster (bypasses bot throttling)
@@ -1997,7 +2029,13 @@ def register_handlers(client):
                         first_bot = userbot_manager._running_bots.get(running_phones[0])
                         if first_bot and first_bot.client:
                             dl_client = first_bot.client
-                    local_file_path = await dl_client.download_media(replied_audio, file="downloads/")
+                    local_file_path = await dl_client.download_media(
+                        replied_audio, 
+                        file="downloads/",
+                        progress_callback=lambda c, t: asyncio.create_task(
+                            download_progress(c, t, progress_download, "Downloading replied media file")
+                        )
+                    )
                     await progress_download.delete()
             
             if not query and not replied_audio:
@@ -2005,11 +2043,6 @@ def register_handlers(client):
                 return
                 
             play_type = "video" if cmd == "/vplay" else "audio"
-            
-            sessions = database.get_sessions(user_id)
-            if not sessions:
-                await event.reply("❌ You do not have any userbot slots.")
-                return
                 
             running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
             vc_bots = []
@@ -2322,7 +2355,7 @@ def register_handlers(client):
             
             if media_obj:
                 is_audio_file = True
-                progress_msg = await event.reply("📥 **Downloading uploaded media...**")
+                progress_msg = await event.reply("📥 **Downloading uploaded media...**\n━━━━━━━━━━━━━━━━━━━━\n📊 Progress: `[░░░░░░░░░░] 0.0%`")
                 os.makedirs("downloads", exist_ok=True)
                 
                 # Use first running userbot client to download 10x faster (bypasses bot throttling)
@@ -2333,7 +2366,13 @@ def register_handlers(client):
                     first_bot = userbot_manager._running_bots.get(running_phones[0])
                     if first_bot and first_bot.client:
                         dl_client = first_bot.client
-                local_file_path = await dl_client.download_media(event.message, file="downloads/")
+                local_file_path = await dl_client.download_media(
+                    event.message, 
+                    file="downloads/",
+                    progress_callback=lambda c, t: asyncio.create_task(
+                        download_progress(c, t, progress_msg, "Downloading uploaded media")
+                    )
+                )
                 await progress_msg.delete()
             
             query = None
@@ -2584,13 +2623,19 @@ def register_handlers(client):
             
             if media_obj:
                 is_audio_file = True
-                progress_msg = await event.reply("📥 **Downloading uploaded media...**")
+                progress_msg = await event.reply("📥 **Downloading uploaded media...**\n━━━━━━━━━━━━━━━━━━━━\n📊 Progress: `[░░░░░░░░░░] 0.0%`")
                 os.makedirs("downloads", exist_ok=True)
                 
                 # Use userbot client to download 10x faster (bypasses bot throttling)
                 bot_obj = userbot_manager._running_bots.get(phone)
                 dl_client = bot_obj.client if (bot_obj and bot_obj.client) else client
-                local_file_path = await dl_client.download_media(event.message, file="downloads/")
+                local_file_path = await dl_client.download_media(
+                    event.message, 
+                    file="downloads/",
+                    progress_callback=lambda c, t: asyncio.create_task(
+                        download_progress(c, t, progress_msg, "Downloading uploaded media")
+                    )
+                )
                 await progress_msg.delete()
             
             query = None
