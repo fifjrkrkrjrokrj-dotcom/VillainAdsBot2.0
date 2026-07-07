@@ -408,17 +408,22 @@ def register_handlers(client):
             f"━━━━━━━━━━━━━━━━━━━━\n"
             f"> **Current Status**: **{vc_status}**\n\n"
             f"ℹ️ **How to use**:\n"
-            f"1. First, click **Join VC** and send your Group/Channel link or username to connect your Userbot.\n"
-            f"2. Once connected, you can play music/video using the **Play Song** button or slash commands:\n"
+            f"1. Click **🔗 Join Group + VC** to auto-join a group by invite link AND its active Voice Chat in one step.\n"
+            f"2. Or click **🎙️ Join VC Only** if your Userbot is already in the group — just send the group link/ID.\n"
+            f"3. Once connected, use the **Play Song** button or slash commands:\n"
             f"   • `/play <song name>`: Stream audio in VC.\n"
-            f"   • `/vplay <song name>`: Stream video call in VC.\n"
-            f"3. Click **Leave VC** to disconnect the Userbot from the call.\n\n"
+            f"   • `/vplay <song name>`: Stream video in VC.\n"
+            f"4. You can also **send an audio file** directly to play it in the VC.\n"
+            f"5. Click **Leave VC** to disconnect the Userbot from the call.\n\n"
             f"⚠️ *Note: Make sure your Userbot is already in the VC before trying to stream audio/video!*"
         )
         
         buttons = [
             [
+                utils.styled_button("🔗 Join Group + VC", f"vc_join_grp_{phone}", style="success"),
                 utils.styled_button(utils.get_text("btn_vc_join", lang), f"vc_join_{phone}", style="primary"),
+            ],
+            [
                 utils.styled_button(utils.get_text("btn_vc_leave", lang), f"vc_leave_{phone}", style="danger")
             ],
             [
@@ -432,6 +437,7 @@ def register_handlers(client):
             await event.edit(text, buttons=buttons)
         except Exception:
             await event.respond(text, buttons=buttons)
+
 
     @client.on(events.CallbackQuery(pattern="^all_slots_vc_menu$"))
     async def all_slots_vc_menu_callback(event):
@@ -458,15 +464,19 @@ def register_handlers(client):
             f"━━━━━━━━━━━━━━━━━━━━\n"
             f"> **VC Connected Bots**: **{vc_connected_count} / {len(running_phones)}**\n\n"
             f"ℹ️ **How to use (Bulk)**:\n"
-            f"1. Click **Join VC (All)** and send a Group/Channel link to connect all active userbots to the Voice Chat.\n"
-            f"2. Use the **Play Song (All)** button or slash commands `/play` / `/vplay` to stream media on all connected userbots simultaneously.\n"
-            f"3. Click **Leave VC (All)** to disconnect all userbots from their calls at once.\n\n"
+            f"1. Click **🔗 Join Group + VC (All)** to auto-join a group by invite link AND its VC on ALL userbots in one step.\n"
+            f"2. Or click **🎙️ Join VC (All)** if all userbots are already in the group — just send the group link/ID.\n"
+            f"3. Use the **Play Song (All)** button, `/play` / `/vplay` or send an audio file to stream on all connected userbots.\n"
+            f"4. Click **Leave VC (All)** to disconnect all userbots at once.\n\n"
             f"⚠️ *Note: Make sure your Userbots are already in the VC before trying to stream audio/video!*"
         )
         
         buttons = [
             [
+                utils.styled_button("🔗 Join Group + VC (All)", "all_slots_vc_join_grp", style="success"),
                 utils.styled_button(utils.get_text("btn_vc_join", lang) + " (All)", "all_slots_vc_join", style="primary"),
+            ],
+            [
                 utils.styled_button(utils.get_text("btn_vc_leave", lang) + " (All)", "all_slots_vc_leave", style="danger")
             ],
             [
@@ -480,6 +490,7 @@ def register_handlers(client):
             await event.edit(text, buttons=buttons)
         except Exception:
             await event.respond(text, buttons=buttons)
+
 
     @client.on(events.CallbackQuery(pattern=r"^vc_leave_(.+)$"))
     async def vc_leave_callback(event):
@@ -506,13 +517,16 @@ def register_handlers(client):
             await event.answer("⚠️ Please start at least one userbot first!", alert=True)
             return
             
-        progress_msg = await event.reply("⏳ **Leaving Voice Chats on all running userbots...**")
-        success_count = 0
-        for phone in running_phones:
-            bot_obj = userbot_manager._running_bots[phone]
+        progress_msg = await event.reply("⏳ **Leaving Voice Chats concurrently on all running userbots...**")
+        
+        async def _leave_one(p):
+            bot_obj = userbot_manager._running_bots[p]
             success, msg = await bot_obj.leave_voice_chat()
-            if success:
-                success_count += 1
+            return success
+            
+        results = await asyncio.gather(*[_leave_one(p) for p in running_phones], return_exceptions=True)
+        success_count = sum(1 for r in results if not isinstance(r, Exception) and r)
+        
         await progress_msg.delete()
         await show_all_slots_dashboard(event, user_id, flash_message=f"🔴 **Left VC on {success_count}/{len(running_phones)} userbots!**")
 
@@ -524,14 +538,17 @@ def register_handlers(client):
             await event.answer("⚠️ No slots found.", alert=True)
             return
             
-        progress_msg = await event.reply("⏳ **Restarting all userbots, please wait...**")
-        restarted = 0
-        for s in sessions:
+        progress_msg = await event.reply("⏳ **Restarting all userbots concurrently...**")
+        
+        async def _restart_one(s):
             phone = s["phone"]
             await userbot_manager.stop_userbot(phone)
-            if await userbot_manager.start_userbot(phone):
-                restarted += 1
-            await asyncio.sleep(1.0)
+            success = await userbot_manager.start_userbot(phone)
+            return success
+            
+        results = await asyncio.gather(*[_restart_one(s) for s in sessions], return_exceptions=True)
+        restarted = sum(1 for r in results if not isinstance(r, Exception) and r)
+        
         await progress_msg.delete()
         await show_all_slots_dashboard(event, user_id, flash_message=f"🔄 **Restarted {restarted} userbots!**")
 
@@ -771,15 +788,19 @@ def register_handlers(client):
             await event.answer("⚠️ Start at least one userbot first!", alert=True)
             return
             
-        progress_msg = await event.reply("⏳ **Refreshing statistics for all running userbots...**")
-        refreshed = 0
-        for phone in running_bots:
+        progress_msg = await event.reply("⏳ **Refreshing statistics for all running userbots concurrently...**")
+        
+        async def _refresh_one(phone):
             bot_obj = userbot_manager._running_bots[phone]
             try:
                 await bot_obj.get_groups(force_refresh=True)
-                refreshed += 1
+                return True
             except Exception:
-                pass
+                return False
+                
+        results = await asyncio.gather(*[_refresh_one(p) for p in running_bots], return_exceptions=True)
+        refreshed = sum(1 for r in results if not isinstance(r, Exception) and r)
+        
         await progress_msg.delete()
         await show_all_slots_dashboard(event, user_id, flash_message=f"🔄 **Refreshed stats for {refreshed} userbots!**")
 
@@ -804,10 +825,14 @@ def register_handlers(client):
     async def all_slots_delete_confirm_callback(event):
         user_id = event.sender_id
         sessions = database.get_sessions(user_id)
-        deleted = 0
-        for s in sessions:
+        
+        async def _delete_one(s):
             await userbot_manager.remove_userbot(s["phone"])
-            deleted += 1
+            return True
+            
+        results = await asyncio.gather(*[_delete_one(s) for s in sessions], return_exceptions=True)
+        deleted = sum(1 for r in results if not isinstance(r, Exception) and r)
+        
         from .my_bots import show_bots_list
         await show_bots_list(event, user_id, flash_message=f"🗑️ **Deleted {deleted} userbot sessions successfully.**")
 
@@ -819,14 +844,17 @@ def register_handlers(client):
             await event.answer("⚠️ No slots found.", alert=True)
             return
             
-        progress_msg = await event.reply("⏳ **Starting all userbots, please wait...**")
-        started = 0
-        for s in sessions:
+        progress_msg = await event.reply("⏳ **Starting all userbots concurrently...**")
+        
+        async def _start_one(s):
             phone = s["phone"]
             if not userbot_manager.is_bot_running(phone):
-                if await userbot_manager.start_userbot(phone):
-                    started += 1
-                await asyncio.sleep(1.0)
+                return await userbot_manager.start_userbot(phone)
+            return False
+            
+        results = await asyncio.gather(*[_start_one(s) for s in sessions], return_exceptions=True)
+        started = sum(1 for r in results if not isinstance(r, Exception) and r)
+        
         await progress_msg.delete()
         await show_all_slots_dashboard(event, user_id, flash_message=f"🟢 **Started {started} userbots!**")
 
@@ -838,13 +866,18 @@ def register_handlers(client):
             await event.answer("⚠️ No slots found.", alert=True)
             return
             
-        progress_msg = await event.reply("⏳ **Stopping all userbots, please wait...**")
-        stopped = 0
-        for s in sessions:
+        progress_msg = await event.reply("⏳ **Stopping all userbots concurrently...**")
+        
+        async def _stop_one(s):
             phone = s["phone"]
             if userbot_manager.is_bot_running(phone):
                 await userbot_manager.stop_userbot(phone)
-                stopped += 1
+                return True
+            return False
+            
+        results = await asyncio.gather(*[_stop_one(s) for s in sessions], return_exceptions=True)
+        stopped = sum(1 for r in results if not isinstance(r, Exception) and r)
+        
         await progress_msg.delete()
         await show_all_slots_dashboard(event, user_id, flash_message=f"🔴 **Stopped {stopped} userbots!**")
 
@@ -1010,7 +1043,67 @@ def register_handlers(client):
         }
         
         prompt_text = utils.get_text("prompt_vc_link", lang)
-        buttons = [[utils.styled_button("🔙 Cancel", f"select_bot_{phone}", style="primary")]]
+        buttons = [[utils.styled_button("🔙 Cancel", f"vc_menu_{phone}", style="primary")]]
+        try:
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern=r"^vc_join_grp_(.+)$"))
+    async def vc_join_grp_callback(event):
+        """Join Group via invite link AND its VC in one step (single bot)."""
+        phone = event.pattern_match.group(1).strip()
+        user_id = event.sender_id
+        
+        if not userbot_manager.is_bot_running(phone):
+            await event.answer("⚠️ Userbot must be running to join a group/VC.", alert=True)
+            return
+            
+        _bot_action_states[user_id] = {
+            "phone": phone,
+            "action": "WAITING_FOR_VC_GRP_LINK"
+        }
+        
+        prompt_text = (
+            "🔗 **Join Group + VC (Auto)**\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "> Send your **group invite link** (e.g. `https://t.me/+xxxx`) or group username.\n\n"
+            "✅ The userbot will:\n"
+            "1. **Auto-join** the group/channel via the link.\n"
+            "2. **Immediately join** the active Voice Chat in that group.\n\n"
+            "✍️ **Send the group link or username below:**"
+        )
+        buttons = [[utils.styled_button("🔙 Cancel", f"vc_menu_{phone}", style="primary")]]
+        try:
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_vc_join_grp$"))
+    async def all_slots_vc_join_grp_callback(event):
+        """Join Group via invite link AND its VC in one step (all bots)."""
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        
+        sessions = database.get_sessions(user_id)
+        running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
+        if not running_phones:
+            await event.answer("⚠️ Please start at least one userbot first!", alert=True)
+            return
+            
+        _bot_action_states[user_id] = {
+            "action": "WAITING_FOR_ALL_VC_GRP_LINK"
+        }
+        
+        prompt_text = (
+            "🔗 **Join Group + VC — All Slots (Auto)**\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"> **{len(running_phones)} userbots** will all:\n"
+            "1. **Auto-join** the group/channel via your link.\n"
+            "2. **Immediately join** the active Voice Chat in that group.\n\n"
+            "✍️ **Send the group invite link or username below:**"
+        )
+        buttons = [[utils.styled_button("🔙 Cancel", "all_slots_vc_menu", style="primary")]]
         try:
             await event.edit(prompt_text, buttons=buttons)
         except Exception:
@@ -1705,12 +1798,34 @@ def register_handlers(client):
         
         # Check for /play and /vplay commands first
         cmd_text = event.text.strip() if event.text else ""
-        if cmd_text.startswith("/play ") or cmd_text.startswith("/vplay "):
+        if cmd_text.startswith("/play") or cmd_text.startswith("/vplay"):
             parts = cmd_text.split(" ", 1)
             cmd = parts[0].lower()
             query = parts[1].strip() if len(parts) > 1 else ""
-            if not query:
-                await event.reply("❌ Please provide a song/video name or link.\nFormat: `/play <songname>` or `/vplay <songname>`")
+            
+            # Check reply for audio
+            replied_audio = None
+            local_file_path = None
+            audio_title = None
+            audio_duration = 30
+            
+            if event.message.is_reply:
+                reply_msg = await event.get_reply_message()
+                if reply_msg and (reply_msg.audio or reply_msg.voice or (reply_msg.document and getattr(reply_msg.document, "mime_type", "").startswith("audio/"))):
+                    replied_audio = reply_msg
+                    
+            if replied_audio:
+                progress_download = await event.reply("📥 **Downloading replied audio/voice...**")
+                os.makedirs("downloads", exist_ok=True)
+                local_file_path = await replied_audio.download_media(file="downloads/")
+                await progress_download.delete()
+                
+                audio_media = replied_audio.audio or replied_audio.voice or replied_audio.document
+                audio_title = getattr(replied_audio.audio, "title", None) or getattr(replied_audio.document, "title", None) or "Replied Audio"
+                audio_duration = getattr(audio_media, "duration", 30)
+            
+            if not query and not replied_audio:
+                await event.reply("❌ Please provide a song/video name/link, or reply to an audio file.\nFormat: `/play <songname>` or `/vplay <songname>`")
                 return
                 
             play_type = "video" if cmd == "/vplay" else "audio"
@@ -1724,31 +1839,27 @@ def register_handlers(client):
             vc_bots = []
             for p in running_phones:
                 bot_obj = userbot_manager._running_bots[p]
-                if getattr(bot_obj, "current_vc_chat_id", None) or getattr(bot_obj, "current_vc_link", None):
+                if getattr(bot_obj, "current_vc_chat_id", None):
                     vc_bots.append((p, bot_obj))
                     
             if not vc_bots:
                 await event.reply("❌ None of your running userbots are in a Voice Chat. Make them join a VC first!")
                 return
                 
-            progress_msg = await event.reply(f"⏳ **Processing playback request on {len(vc_bots)} userbot(s)...**")
+            progress_msg = await event.reply(f"⏳ **Starting play on {len(vc_bots)} userbot(s) concurrently...**")
+            
+            async def _play_one_concurrent(p, bot_obj):
+                return await bot_obj.play_song(query, play_type=play_type, local_file=local_file_path, title=audio_title, duration=audio_duration)
+                
+            results = await asyncio.gather(*[_play_one_concurrent(p, bot) for p, bot in vc_bots], return_exceptions=True)
+            await progress_msg.delete()
             
             success_count = 0
             song_info_global = None
-            for p, bot_obj in vc_bots:
-                # Re-join VC to avoid video note and audio stream bugs
-                vc_link = getattr(bot_obj, "current_vc_link", None)
-                if vc_link:
-                    await bot_obj.leave_voice_chat()
-                    await asyncio.sleep(1.5)
-                    await bot_obj.join_voice_chat(vc_link)
-                    
-                success, msg, song_info = await bot_obj.play_song(query, play_type=play_type)
-                if success:
+            for res in results:
+                if not isinstance(res, Exception) and res[0]:
                     success_count += 1
-                    song_info_global = song_info
-                    
-            await progress_msg.delete()
+                    song_info_global = res[2]
             
             if success_count > 0 and song_info_global:
                 caption = (
@@ -1797,7 +1908,7 @@ def register_handlers(client):
         if action == "WAITING_FOR_ALL_VC_LINK":
             link = event.text.strip()
             if not link:
-                await event.reply("❌ Link cannot be empty.")
+                await event.reply("❌ Chat ID/Username/Link cannot be empty.")
                 return
                 
             sessions = database.get_sessions(user_id)
@@ -1806,24 +1917,63 @@ def register_handlers(client):
                 await event.reply("❌ No userbots are currently running. Please start your userbots first.")
                 return
                 
-            progress_msg = await event.reply(f"⏳ **Joining Voice Chat on {len(running_phones)} running userbots...**")
-            success_count = 0
-            fail_msgs = []
+            progress_msg = await event.reply(f"⏳ **Joining Voice Chat on {len(running_phones)} running userbots concurrently...**")
             
-            for phone_num in running_phones:
+            async def _join_vc_concurrent(phone_num):
                 bot_obj = userbot_manager._running_bots[phone_num]
                 success, msg = await bot_obj.join_voice_chat(link)
+                return phone_num, success, msg
+                
+            results = await asyncio.gather(*[_join_vc_concurrent(p) for p in running_phones], return_exceptions=True)
+            await progress_msg.delete()
+            
+            success_count = 0
+            fail_msgs = []
+            for res in results:
+                if isinstance(res, Exception):
+                    fail_msgs.append(f"⚠️ Task Error: {res}")
+                    continue
+                phone_num, success, msg = res
                 if success:
                     success_count += 1
                 else:
                     fail_msgs.append(f"📞 `{phone_num}`: {msg}")
                     
-            await progress_msg.delete()
-            
             flash = f"🎙️ **VC Join Results**:\nJoined: {success_count}/{len(running_phones)}"
             if fail_msgs:
                 flash += f"\nErrors:\n" + "\n".join(fail_msgs)
                 
+            await show_all_slots_dashboard(event, user_id, flash_message=flash)
+            return
+
+        elif action == "WAITING_FOR_ALL_VC_GRP_LINK":
+            link = event.text.strip()
+            if not link:
+                await event.reply("❌ Group invite link cannot be empty.")
+                return
+                
+            sessions = database.get_sessions(user_id)
+            running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
+            if not running_phones:
+                await event.reply("❌ No userbots are currently running. Please start your userbots first.")
+                return
+                
+            progress_msg = await event.reply(f"⏳ **All {len(running_phones)} userbots joining group concurrently...**")
+            
+            async def _join_grp_concurrent(phone_num):
+                bot_obj = userbot_manager._running_bots[phone_num]
+                success = await join_channel_single(bot_obj.client, link)
+                return phone_num, success
+                
+            results = await asyncio.gather(*[_join_grp_concurrent(p) for p in running_phones], return_exceptions=True)
+            await progress_msg.delete()
+            
+            success_count = 0
+            for res in results:
+                if not isinstance(res, Exception) and res[1]:
+                    success_count += 1
+                    
+            flash = f"🔗 **Group Join Results**:\nJoined: {success_count}/{len(running_phones)} userbots successfully!"
             await show_all_slots_dashboard(event, user_id, flash_message=flash)
             return
             
@@ -1850,7 +2000,7 @@ def register_handlers(client):
             flash = "👋 **Welcome message updated for all bots!**"
             await show_all_slots_dashboard(event, user_id, flash_message=flash)
             return
-
+ 
         elif action == "WAITING_FOR_ALL_CLONE_TARGET":
             target = event.text.strip()
             if not target:
@@ -1864,17 +2014,23 @@ def register_handlers(client):
                 await event.reply("❌ No userbots are currently running. Please start your userbots first.")
                 return
                 
-            progress_msg = await event.reply(f"⏳ **Cloning profile details on {len(running_phones)} running userbots...**")
-            success_count = 0
-            for phone_num in running_phones:
-                success, msg = await userbot_manager.clone_profile(phone_num, target, clone_type=clone_type)
-                if success:
-                    success_count += 1
+            progress_msg = await event.reply(f"⏳ **Cloning profile details on {len(running_phones)} running userbots concurrently...**")
+            
+            async def _clone_concurrent(phone_num):
+                return await userbot_manager.clone_profile(phone_num, target, clone_type=clone_type)
+                
+            results = await asyncio.gather(*[_clone_concurrent(p) for p in running_phones], return_exceptions=True)
             await progress_msg.delete()
+            
+            success_count = 0
+            for res in results:
+                if not isinstance(res, Exception) and res[0]:
+                    success_count += 1
+                    
             flash = f"👤 **Profile Cloning Results**:\nCloned successfully on {success_count}/{len(running_phones)} userbots!"
             await show_all_slots_dashboard(event, user_id, flash_message=flash)
             return
-
+ 
         elif action == "WAITING_FOR_ALL_NAME":
             new_name = event.text.strip()
             if not new_name:
@@ -1891,14 +2047,14 @@ def register_handlers(client):
                     try:
                         from telethon.tl.functions.account import UpdateProfileRequest
                         bot_obj = userbot_manager._running_bots[phone_num]
-                        await bot_obj.client(UpdateProfileRequest(first_name=new_name))
+                        asyncio.create_task(bot_obj.client(UpdateProfileRequest(first_name=new_name)))
                     except Exception:
                         pass
                 updated_count += 1
             flash = f"✏️ **Updated name to '{new_name}' for {updated_count} userbots!**"
             await show_all_slots_dashboard(event, user_id, flash_message=flash)
             return
-
+ 
         elif action == "WAITING_FOR_ALL_CUSTOM_INTERVAL":
             val_str = event.text.strip()
             if val_str.isdigit() and int(val_str) >= 60:
@@ -1914,7 +2070,7 @@ def register_handlers(client):
             else:
                 await event.reply(utils.get_text("interval_invalid", lang))
                 return
-
+ 
         elif action == "WAITING_FOR_ALL_CUSTOM_DELAY":
             val_str = event.text.strip()
             if val_str.isdigit() and 2 <= int(val_str) <= 60:
@@ -1930,7 +2086,7 @@ def register_handlers(client):
             else:
                 await event.reply(utils.get_text("inter_delay_invalid", lang))
                 return
-
+ 
         elif action == "WAITING_FOR_ALL_MULTI_MSG":
             raw_text = event.text
             msgs = [m.strip() for m in raw_text.split(",") if m.strip()]
@@ -1947,45 +2103,62 @@ def register_handlers(client):
             else:
                 await event.reply("❌ Message list cannot be empty. Separate messages with commas `,`.")
                 return
-
+ 
         elif action == "WAITING_FOR_ALL_SONG":
-            query = event.text.strip()
-            if not query:
-                await event.reply("❌ Song query cannot be empty.")
-                return
-                
+            # Check if there is an audio or voice file attached
+            media = event.message.audio or event.message.voice or event.message.document
+            is_audio_file = False
+            local_file_path = None
+            audio_title = "Uploaded Audio"
+            audio_duration = 30
+            
+            if media:
+                mime = getattr(media, "mime_type", "")
+                if event.message.audio or event.message.voice or (event.message.document and mime.startswith("audio/")):
+                    is_audio_file = True
+                    progress_msg = await event.reply("📥 **Downloading uploaded audio file...**")
+                    os.makedirs("downloads", exist_ok=True)
+                    local_file_path = await event.message.download_media(file="downloads/")
+                    await progress_msg.delete()
+                    if local_file_path:
+                        audio_title = getattr(event.message.audio, "title", None) or getattr(event.message.document, "title", None) or "Uploaded Audio"
+                        audio_duration = getattr(media, "duration", 30)
+            
+            query = None
+            if not is_audio_file:
+                query = event.text.strip() if event.text else ""
+                if not query:
+                    await event.reply("❌ Please provide a song query or send an audio file.")
+                    return
+                    
             sessions = database.get_sessions(user_id)
             running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
             
             vc_bots = []
             for p in running_phones:
                 bot_obj = userbot_manager._running_bots[p]
-                if getattr(bot_obj, "current_vc_chat_id", None) or getattr(bot_obj, "current_vc_link", None):
+                if getattr(bot_obj, "current_vc_chat_id", None):
                     vc_bots.append((p, bot_obj))
                     
             if not vc_bots:
                 await event.reply("❌ No running userbots are in a Voice Chat.")
                 return
                 
-            progress_msg = await event.reply(f"⏳ **Searching and playing song on {len(vc_bots)} userbots...**")
+            progress_msg = await event.reply(f"⏳ **Starting play on {len(vc_bots)} userbots concurrently...**")
+            
+            async def _play_one_all_concurrent(p, bot_obj):
+                return await bot_obj.play_song(query, play_type="audio", local_file=local_file_path, title=audio_title, duration=audio_duration)
+                
+            results = await asyncio.gather(*[_play_one_all_concurrent(p, bot) for p, bot in vc_bots], return_exceptions=True)
+            await progress_msg.delete()
             
             success_count = 0
             song_info_global = None
-            for p, bot_obj in vc_bots:
-                # Re-join VC to avoid stream bugs
-                vc_link = getattr(bot_obj, "current_vc_link", None)
-                if vc_link:
-                    await bot_obj.leave_voice_chat()
-                    await asyncio.sleep(1.5)
-                    await bot_obj.join_voice_chat(vc_link)
-                    
-                success, msg, song_info = await bot_obj.play_song(query, play_type="audio")
-                if success:
+            for res in results:
+                if not isinstance(res, Exception) and res[0]:
                     success_count += 1
-                    song_info_global = song_info
+                    song_info_global = res[2]
                     
-            await progress_msg.delete()
-            
             if success_count > 0 and song_info_global:
                 caption = (
                     f"> 🎵 **Now Playing (All Slots)**\n"
@@ -2047,7 +2220,7 @@ def register_handlers(client):
         elif action == "WAITING_FOR_VC_LINK":
             link = event.text.strip()
             if not link:
-                await event.reply("❌ Link cannot be empty.")
+                await event.reply("❌ Chat ID/Username/Link cannot be empty.")
                 return
                 
             if not userbot_manager.is_bot_running(phone):
@@ -2063,6 +2236,27 @@ def register_handlers(client):
                 flash = f"✅ **Joined Voice Chat!**\n{msg}"
             else:
                 flash = f"❌ **Failed to join VC:** {msg}"
+
+        # 2.6 Join Group via Link (Single Bot)
+        elif action == "WAITING_FOR_VC_GRP_LINK":
+            link = event.text.strip()
+            if not link:
+                await event.reply("❌ Group invite link cannot be empty.")
+                return
+                
+            if not userbot_manager.is_bot_running(phone):
+                await event.reply("❌ Userbot is not running.")
+                return
+                
+            progress_msg = await event.reply("⏳ **Joining Group, please wait...**")
+            bot_obj = userbot_manager._running_bots[phone]
+            success = await join_channel_single(bot_obj.client, link)
+            await progress_msg.delete()
+            
+            if success:
+                flash = f"✅ **Successfully joined the group!**\nNow you can click '🎙️ Join VC' to enter the Voice Chat."
+            else:
+                flash = "❌ **Failed to join the group. Make sure the link is valid.**"
                 
         # 3. Clone Profile
         elif action == "WAITING_FOR_CLONE_TARGET":
@@ -2080,7 +2274,7 @@ def register_handlers(client):
                 flash = f"✅ **Profile successfully cloned!**\n{msg}"
             else:
                 flash = f"❌ **Cloning failed:** {msg}"
-
+ 
         # 4. Change Name
         elif action == "WAITING_FOR_NAME":
             new_name = event.text.strip()
@@ -2093,7 +2287,7 @@ def register_handlers(client):
                     try:
                         from telethon.tl.functions.account import UpdateProfileRequest
                         bot_obj = userbot_manager._running_bots[phone]
-                        await bot_obj.client(UpdateProfileRequest(first_name=new_name))
+                        asyncio.create_task(bot_obj.client(UpdateProfileRequest(first_name=new_name)))
                     except Exception as e:
                         logger.warning(f"Could not change userbot profile name: {e}")
                         
@@ -2113,7 +2307,7 @@ def register_handlers(client):
             else:
                 await event.reply(utils.get_text("interval_invalid", lang))
                 return
-
+ 
         # 5.5 Custom Delay
         elif action == "WAITING_FOR_CUSTOM_DELAY":
             val_str = event.text.strip()
@@ -2125,7 +2319,7 @@ def register_handlers(client):
             else:
                 await event.reply(utils.get_text("inter_delay_invalid", lang))
                 return
-
+ 
         # 5.6 Multiple Messages
         elif action == "WAITING_FOR_MULTI_MSG":
             raw_text = event.text
@@ -2137,24 +2331,42 @@ def register_handlers(client):
             else:
                 await event.reply("❌ Message list cannot be empty. Separate messages with commas `,`.")
                 return
-
+ 
         # 5.7 Play Song query
         elif action == "WAITING_FOR_SONG":
-            query = event.text.strip()
-            if not query:
-                await event.reply("❌ Song query cannot be empty.")
+            # Check if there is an audio or voice file attached
+            media = event.message.audio or event.message.voice or event.message.document
+            is_audio_file = False
+            local_file_path = None
+            audio_title = "Uploaded Audio"
+            audio_duration = 30
+            
+            if media:
+                mime = getattr(media, "mime_type", "")
+                if event.message.audio or event.message.voice or (event.message.document and mime.startswith("audio/")):
+                    is_audio_file = True
+                    progress_msg = await event.reply("📥 **Downloading uploaded audio file...**")
+                    os.makedirs("downloads", exist_ok=True)
+                    local_file_path = await event.message.download_media(file="downloads/")
+                    await progress_msg.delete()
+                    if local_file_path:
+                        audio_title = getattr(event.message.audio, "title", None) or getattr(event.message.document, "title", None) or "Uploaded Audio"
+                        audio_duration = getattr(media, "duration", 30)
+            
+            query = None
+            if not is_audio_file:
+                query = event.text.strip() if event.text else ""
+                if not query:
+                    await event.reply("❌ Please provide a song query or send an audio file.")
+                    return
+                
+            if not userbot_manager.is_bot_running(phone):
+                await event.reply("❌ Userbot is not running.")
                 return
                 
-            progress_msg = await event.reply("⏳ **Searching and playing song, please wait...**")
-            
-            # Re-join VC to avoid stream bugs
-            vc_link = getattr(bot_obj, "current_vc_link", None)
-            if vc_link:
-                await bot_obj.leave_voice_chat()
-                await asyncio.sleep(1.5)
-                await bot_obj.join_voice_chat(vc_link)
-                
-            success, msg, song_info = await bot_obj.play_song(query, play_type="audio")
+            bot_obj = userbot_manager._running_bots[phone]
+            progress_msg = await event.reply("⏳ **Playing song, please wait...**")
+            success, msg, song_info = await bot_obj.play_song(query, play_type="audio", local_file=local_file_path, title=audio_title, duration=audio_duration)
             await progress_msg.delete()
             
             if success and song_info:
