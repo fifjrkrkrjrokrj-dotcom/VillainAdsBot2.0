@@ -650,6 +650,13 @@ class UserBot:
             self.current_vc_chat_id = chat_id
             self.current_vc_link = link_or_id
             
+            # Save VC status in MongoDB
+            sess_data = database.get_session(self.session_id)
+            if sess_data:
+                sess_data["vc_chat_id"] = chat_id
+                sess_data["vc_link"] = link_or_id
+                database.save_session(sess_data)
+            
             chat_title = getattr(entity, 'title', 'Group')
             return True, f"Successfully joined Voice Chat of {chat_title}!"
         except Exception as e:
@@ -678,6 +685,15 @@ class UserBot:
                 
             self.current_vc_chat_id = None
             self.current_vc_link = None
+            
+            # Clear VC status in MongoDB
+            sess_data = database.get_session(self.session_id)
+            if sess_data:
+                sess_data["vc_chat_id"] = None
+                sess_data["vc_link"] = None
+                sess_data["current_song"] = None
+                database.save_session(sess_data)
+                
             return True, "Successfully left voice chat."
         except Exception as e:
             logger.warning(f"Error leaving VC for userbot {self.session_id}: {e}")
@@ -746,6 +762,18 @@ class UserBot:
                 "thumb": thumb,
                 "file_path": file_path
             }
+            
+            # Save playing status in MongoDB
+            sess_data = database.get_session(self.session_id)
+            if sess_data:
+                sess_data["current_song"] = {
+                    "title": title,
+                    "duration": duration,
+                    "play_type": play_type,
+                    "query": query or title
+                }
+                database.save_session(sess_data)
+                
             return True, f"Now playing {title}", song_info
         except Exception as e:
             logger.error(f"Error playing media: {e}")
@@ -873,6 +901,25 @@ class UserBot:
                 except Exception as read_err:
                     logger.error(f"Failed to read session file for DB backup in start(): {read_err}")
                     
+            # Auto-rejoin Voice Chat & resume song if configured in MongoDB
+            saved_vc_link = sess_data.get("vc_link")
+            if saved_vc_link:
+                async def _auto_rejoin_vc():
+                    await asyncio.sleep(3.0)
+                    logger.info(f"Userbot {self.session_id} auto-rejoining saved VC: {saved_vc_link}")
+                    success, join_msg = await self.join_voice_chat(saved_vc_link)
+                    if success:
+                        saved_song = sess_data.get("current_song")
+                        if saved_song:
+                            logger.info(f"Userbot {self.session_id} resuming saved song: {saved_song['title']}")
+                            await self.play_song(
+                                query=saved_song.get("query"),
+                                play_type=saved_song.get("play_type", "audio")
+                            )
+                t_rejoin = asyncio.create_task(_auto_rejoin_vc())
+                self.bg_tasks.add(t_rejoin)
+                t_rejoin.add_done_callback(self.bg_tasks.discard)
+
             database.save_session(sess_data)
             logger.info(f"Userbot {self.session_id} started successfully.")
             return True
