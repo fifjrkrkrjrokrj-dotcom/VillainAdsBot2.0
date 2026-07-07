@@ -236,9 +236,10 @@ async def get_peer_from_link(client: TelegramClient, link: str):
             try:
                 return await client.get_entity(chat_id)
             except Exception:
-                # Fallback: fetch dialogs to cache the entities and retry
-                await client.get_dialogs(limit=100)
-                return await client.get_entity(chat_id)
+                # Fallback: Iterate dialogs to find the correct entity
+                async for dialog in client.iter_dialogs():
+                    if dialog.id == chat_id:
+                        return dialog.entity
     except Exception:
         pass
         
@@ -586,6 +587,7 @@ class UserBot:
         self.current_vc_chat_id: Optional[int] = None
         self.current_vc_link: Optional[str] = None
         self.pytgcalls_client: Optional[PyTgCalls] = None
+        self.is_muted = True
         self.bg_tasks: Set[asyncio.Task] = set()
         
         # Caching attributes to resolve performance bottlenecks
@@ -650,6 +652,14 @@ class UserBot:
             self.current_vc_chat_id = chat_id
             self.current_vc_link = link_or_id
             
+            # Immediately mute the mic (mic off) on join!
+            try:
+                await pytg.mute_stream(chat_id)
+                self.is_muted = True
+                logger.info(f"Muted stream for userbot {self.session_id} in chat {chat_id}")
+            except Exception as mute_err:
+                logger.warning(f"Failed to auto-mute stream on join: {mute_err}")
+                
             # Save VC status in MongoDB
             sess_data = database.get_session(self.session_id)
             if sess_data:
@@ -704,6 +714,51 @@ class UserBot:
             self.pytgcalls_client = PyTgCalls(self.client)
             await self.pytgcalls_client.start()
         return self.pytgcalls_client
+
+    async def mute_mic(self) -> tuple:
+        if not self.is_running or not self.current_vc_chat_id:
+            return False, "Bot is not in any VC."
+        try:
+            pytg = await self.get_pytgcalls()
+            await pytg.mute_stream(self.current_vc_chat_id)
+            self.is_muted = True
+            return True, "Mic turned OFF (Muted)."
+        except Exception as e:
+            logger.error(f"Failed to mute: {e}")
+            return False, f"Failed to mute: {e}"
+
+    async def unmute_mic(self) -> tuple:
+        if not self.is_running or not self.current_vc_chat_id:
+            return False, "Bot is not in any VC."
+        try:
+            pytg = await self.get_pytgcalls()
+            await pytg.unmute_stream(self.current_vc_chat_id)
+            self.is_muted = False
+            return True, "Mic turned ON (Unmuted)."
+        except Exception as e:
+            logger.error(f"Failed to unmute: {e}")
+            return False, f"Failed to unmute: {e}"
+
+    async def stop_song(self) -> tuple:
+        if not self.is_running or not self.current_vc_chat_id:
+            return False, "Not in a Voice Chat."
+        try:
+            silence_file = await generate_silence()
+            pytg = await self.get_pytgcalls()
+            await pytg.change_stream(
+                self.current_vc_chat_id,
+                AudioPiped(silence_file)
+            )
+            self.is_muted = True
+            # Clear in MongoDB and memory
+            sess_data = database.get_session(self.session_id)
+            if sess_data:
+                sess_data["current_song"] = None
+                database.save_session(sess_data)
+            return True, "Playback stopped."
+        except Exception as e:
+            logger.error(f"Failed to stop playback: {e}")
+            return False, f"Failed to stop: {e}"
 
     async def play_song(self, query: str, play_type: str = "audio", local_file: str = None, title: str = None, duration: int = 30) -> tuple:
         """
@@ -788,7 +843,7 @@ class UserBot:
         if force_refresh or not self.groups_cache or (current_time - self.groups_cache_time > 3600):
             try:
                 logger.info(f"Fetching dialogs for userbot {self.session_id} to refresh groups cache...")
-                dialogs = await self.client.get_dialogs()
+                dialogs = await self.client.get_dialogs(limit=250)
                 self.groups_cache = [d for d in dialogs if d.is_group]
                 self.groups_cache_time = current_time
                 
@@ -833,6 +888,16 @@ class UserBot:
             return False
             
         self.client = TelegramClient(session_file, config.API_ID, config.API_HASH)
+        
+        # Optimize Telethon SQLite session speed and prevent database locks
+        try:
+            conn = self.client.session._conn
+            if conn:
+                conn.execute("PRAGMA journal_mode=WAL;")
+                conn.execute("PRAGMA synchronous=NORMAL;")
+                logger.info(f"Enabled WAL mode for userbot SQLite session: {session_file}")
+        except Exception as sqlite_opt_err:
+            logger.warning(f"Could not optimize SQLite session parameters: {sqlite_opt_err}")
         
         try:
             await self.client.connect()

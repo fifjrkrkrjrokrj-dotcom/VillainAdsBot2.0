@@ -11,6 +11,40 @@ from userbot import join_vc_by_link, leave_chat_single
 
 logger = logging.getLogger(__name__)
 
+def extract_media_info(msg):
+    """
+    Extracts file path, title, and duration from a message containing audio/voice/video.
+    """
+    media = msg.audio or msg.voice or msg.video or getattr(msg, "gif", None)
+    if not media and msg.document:
+        mime = getattr(msg.document, "mime_type", "")
+        if mime.startswith("audio/") or mime.startswith("video/"):
+            media = msg.document
+            
+    if not media:
+        return None, None, 30
+        
+    title = "Uploaded Media"
+    duration = 30
+    
+    # Extract title
+    if msg.audio:
+        title = getattr(msg.audio, "title", None) or getattr(msg.audio, "file_name", None) or "Audio File"
+    elif msg.voice:
+        title = "Voice Note"
+    elif msg.video:
+        title = getattr(msg.video, "file_name", None) or "Video File"
+    elif msg.document:
+        title = getattr(msg.document, "file_name", None) or "Document Media"
+        
+    # Extract duration
+    for attr in getattr(media, "attributes", []):
+        if hasattr(attr, "duration"):
+            duration = attr.duration
+            break
+            
+    return media, title, duration
+
 # In-memory dictionary containing active prompt states for user interaction
 # Structure: { user_id: { "phone": str, "action": str } }
 _bot_action_states = {}
@@ -535,6 +569,93 @@ def register_handlers(client):
             await event.edit(prompt_text, buttons=buttons)
         except Exception:
             await event.respond(prompt_text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern=r"^vc_mute_(.+)$"))
+    async def vc_mute_callback(event):
+        phone = event.pattern_match.group(1).strip()
+        user_id = event.sender_id
+        bot_obj = userbot_manager._running_bots.get(phone)
+        if not bot_obj:
+            await event.answer("⚠️ Userbot is not running.", alert=True)
+            return
+        success, msg = await bot_obj.mute_mic()
+        await event.answer(msg, alert=True)
+        await vc_menu_callback(event)
+
+    @client.on(events.CallbackQuery(pattern=r"^vc_unmute_(.+)$"))
+    async def vc_unmute_callback(event):
+        phone = event.pattern_match.group(1).strip()
+        user_id = event.sender_id
+        bot_obj = userbot_manager._running_bots.get(phone)
+        if not bot_obj:
+            await event.answer("⚠️ Userbot is not running.", alert=True)
+            return
+        success, msg = await bot_obj.unmute_mic()
+        await event.answer(msg, alert=True)
+        await vc_menu_callback(event)
+
+    @client.on(events.CallbackQuery(pattern=r"^stop_song_(.+)$"))
+    async def stop_song_callback(event):
+        phone = event.pattern_match.group(1).strip()
+        user_id = event.sender_id
+        bot_obj = userbot_manager._running_bots.get(phone)
+        if not bot_obj:
+            await event.answer("⚠️ Userbot is not running.", alert=True)
+            return
+        success, msg = await bot_obj.stop_song()
+        await event.answer(msg, alert=True)
+        await vc_menu_callback(event)
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_vc_mute$"))
+    async def all_slots_vc_mute_callback(event):
+        user_id = event.sender_id
+        sessions = database.get_sessions(user_id)
+        running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
+        if not running_phones:
+            await event.answer("⚠️ Please start at least one userbot first!", alert=True)
+            return
+            
+        async def _mute_one(p):
+            bot_obj = userbot_manager._running_bots[p]
+            return await bot_obj.mute_mic()
+            
+        await asyncio.gather(*[_mute_one(p) for p in running_phones], return_exceptions=True)
+        await event.answer("🔇 Muted mic on all running userbots!", alert=True)
+        await all_slots_vc_menu_callback(event)
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_vc_unmute$"))
+    async def all_slots_vc_unmute_callback(event):
+        user_id = event.sender_id
+        sessions = database.get_sessions(user_id)
+        running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
+        if not running_phones:
+            await event.answer("⚠️ Please start at least one userbot first!", alert=True)
+            return
+            
+        async def _unmute_one(p):
+            bot_obj = userbot_manager._running_bots[p]
+            return await bot_obj.unmute_mic()
+            
+        await asyncio.gather(*[_unmute_one(p) for p in running_phones], return_exceptions=True)
+        await event.answer("🔊 Unmuted mic on all running userbots!", alert=True)
+        await all_slots_vc_menu_callback(event)
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_stop_song$"))
+    async def all_slots_stop_song_callback(event):
+        user_id = event.sender_id
+        sessions = database.get_sessions(user_id)
+        running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
+        if not running_phones:
+            await event.answer("⚠️ Please start at least one userbot first!", alert=True)
+            return
+            
+        async def _stop_one(p):
+            bot_obj = userbot_manager._running_bots[p]
+            return await bot_obj.stop_song()
+            
+        await asyncio.gather(*[_stop_one(p) for p in running_phones], return_exceptions=True)
+        await event.answer("🛑 Stopped playback on all running userbots!", alert=True)
+        await all_slots_vc_menu_callback(event)
 
     @client.on(events.CallbackQuery(pattern="^all_slots_vc_leave_grp$"))
     async def all_slots_vc_leave_grp_callback(event):
@@ -1864,18 +1985,13 @@ def register_handlers(client):
             
             if event.message.is_reply:
                 reply_msg = await event.get_reply_message()
-                if reply_msg and (reply_msg.audio or reply_msg.voice or (reply_msg.document and getattr(reply_msg.document, "mime_type", "").startswith("audio/"))):
+                media_obj, audio_title, audio_duration = extract_media_info(reply_msg)
+                if media_obj:
                     replied_audio = reply_msg
-                    
-            if replied_audio:
-                progress_download = await event.reply("📥 **Downloading replied audio/voice...**")
-                os.makedirs("downloads", exist_ok=True)
-                local_file_path = await replied_audio.download_media(file="downloads/")
-                await progress_download.delete()
-                
-                audio_media = replied_audio.audio or replied_audio.voice or replied_audio.document
-                audio_title = getattr(replied_audio.audio, "title", None) or getattr(replied_audio.document, "title", None) or "Replied Audio"
-                audio_duration = getattr(audio_media, "duration", 30)
+                    progress_download = await event.reply("📥 **Downloading replied media file...**")
+                    os.makedirs("downloads", exist_ok=True)
+                    local_file_path = await replied_audio.download_media(file="downloads/")
+                    await progress_download.delete()
             
             if not query and not replied_audio:
                 await event.reply("❌ Please provide a song/video name/link, or reply to an audio file.\nFormat: `/play <songname>` or `/vplay <songname>`")
@@ -2192,24 +2308,17 @@ def register_handlers(client):
                 return
  
         elif action == "WAITING_FOR_ALL_SONG":
-            # Check if there is an audio or voice file attached
-            media = event.message.audio or event.message.voice or event.message.document
+            # Extract media info using extract_media_info
+            media_obj, audio_title, audio_duration = extract_media_info(event.message)
             is_audio_file = False
             local_file_path = None
-            audio_title = "Uploaded Audio"
-            audio_duration = 30
             
-            if media:
-                mime = getattr(media, "mime_type", "")
-                if event.message.audio or event.message.voice or (event.message.document and mime.startswith("audio/")):
-                    is_audio_file = True
-                    progress_msg = await event.reply("📥 **Downloading uploaded audio file...**")
-                    os.makedirs("downloads", exist_ok=True)
-                    local_file_path = await event.message.download_media(file="downloads/")
-                    await progress_msg.delete()
-                    if local_file_path:
-                        audio_title = getattr(event.message.audio, "title", None) or getattr(event.message.document, "title", None) or "Uploaded Audio"
-                        audio_duration = getattr(media, "duration", 30)
+            if media_obj:
+                is_audio_file = True
+                progress_msg = await event.reply("📥 **Downloading uploaded media...**")
+                os.makedirs("downloads", exist_ok=True)
+                local_file_path = await event.message.download_media(file="downloads/")
+                await progress_msg.delete()
             
             query = None
             if not is_audio_file:
@@ -2452,24 +2561,17 @@ def register_handlers(client):
  
         # 5.7 Play Song query
         elif action == "WAITING_FOR_SONG":
-            # Check if there is an audio or voice file attached
-            media = event.message.audio or event.message.voice or event.message.document
+            # Extract media info using extract_media_info
+            media_obj, audio_title, audio_duration = extract_media_info(event.message)
             is_audio_file = False
             local_file_path = None
-            audio_title = "Uploaded Audio"
-            audio_duration = 30
             
-            if media:
-                mime = getattr(media, "mime_type", "")
-                if event.message.audio or event.message.voice or (event.message.document and mime.startswith("audio/")):
-                    is_audio_file = True
-                    progress_msg = await event.reply("📥 **Downloading uploaded audio file...**")
-                    os.makedirs("downloads", exist_ok=True)
-                    local_file_path = await event.message.download_media(file="downloads/")
-                    await progress_msg.delete()
-                    if local_file_path:
-                        audio_title = getattr(event.message.audio, "title", None) or getattr(event.message.document, "title", None) or "Uploaded Audio"
-                        audio_duration = getattr(media, "duration", 30)
+            if media_obj:
+                is_audio_file = True
+                progress_msg = await event.reply("📥 **Downloading uploaded media...**")
+                os.makedirs("downloads", exist_ok=True)
+                local_file_path = await event.message.download_media(file="downloads/")
+                await progress_msg.delete()
             
             query = None
             if not is_audio_file:
