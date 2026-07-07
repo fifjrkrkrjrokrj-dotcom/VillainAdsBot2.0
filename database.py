@@ -193,6 +193,18 @@ def get_global_settings() -> Dict[str, Any]:
             if updated:
                 _db.settings.replace_one({"id": "global"}, settings)
                 
+        # Override with current environment values at runtime so Railway environment changes take priority
+        import os
+        for k in ["support_channel", "support_group", "upi_id", "usdt_bep20_address", "ton_address"]:
+            env_val = os.getenv(k.upper()) or os.getenv(k)
+            if env_val:
+                settings[k] = env_val
+        
+        # Ensure ORIGINAL_ADMIN_IDS are always whitelisted
+        for admin_id in config.ORIGINAL_ADMIN_IDS:
+            if admin_id not in settings.setdefault("admins", []):
+                settings["admins"].append(admin_id)
+                
         _cached_global_settings = settings
         _cached_settings_time = now
         
