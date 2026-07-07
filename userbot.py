@@ -399,6 +399,36 @@ async def join_channel_single(client: TelegramClient, ch: str) -> bool:
         logger.warning(f"Failed to join channel {ch}: {e}")
         return False
 
+
+async def leave_chat_single(client: TelegramClient, ch: str) -> bool:
+    """
+    Attempts to leave a channel or group by link, username, or ID.
+    """
+    from telethon.tl.functions.channels import LeaveChannelRequest
+    from telethon.tl.functions.messages import DeleteChatUserRequest
+    ch = ch.strip()
+    if not ch:
+        return False
+    try:
+        entity = await get_peer_from_link(client, ch)
+        if not entity:
+            return False
+            
+        from telethon.tl.types import Channel
+        if isinstance(entity, Channel):
+            await client(LeaveChannelRequest(entity))
+        else:
+            await client(DeleteChatUserRequest(
+                chat_id=entity.id,
+                user_id=await client.get_input_entity('me')
+            ))
+        logger.info(f"Successfully left channel/group: {ch}")
+        return True
+    except Exception as e:
+        logger.warning(f"Failed to leave channel/group {ch}: {e}")
+        return False
+
+
 async def force_join_channels(client: TelegramClient, channels: list, session_id: str = None):
     """
     Forcibly joins the userbot to a list of channels or invite links.

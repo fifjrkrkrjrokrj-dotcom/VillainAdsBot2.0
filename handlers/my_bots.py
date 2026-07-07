@@ -7,7 +7,7 @@ import models
 import utils
 import config
 import userbot_manager
-from userbot import join_vc_by_link
+from userbot import join_vc_by_link, leave_chat_single
 
 logger = logging.getLogger(__name__)
 
@@ -256,7 +256,9 @@ async def show_bot_dashboard(event, phone: str, user_id: int, flash_message: Opt
                 else:
                     style = row_style
                     
-                if state is not None:
+                if key == "btn_vc_menu":
+                    label = "🎙️ VC + GRP JOINING"
+                elif state is not None:
                     label = utils.get_text(key, lang, state=state)
                 else:
                     label = utils.get_text(key, lang)
@@ -337,7 +339,7 @@ async def show_all_slots_dashboard(event, user_id: int, flash_message: Optional[
         ],
         # Row 1.5: Voice Chat (VC) Menu (All)
         [
-            utils.styled_button("🎙️ Voice Chat Menu (All)", "all_slots_vc_menu", style="success")
+            utils.styled_button("🎙️ VC + GRP JOINING (All)", "all_slots_vc_menu", style="success")
         ],
         # Row 2: Auto-Spam (All), Auto-Welcome (All)
         [
@@ -404,30 +406,30 @@ def register_handlers(client):
         vc_status = "✅ Connected" if vc_chat_id else "❌ Disconnected"
         
         text = (
-            f"🎙️ **Voice Chat Settings Menu**\n"
+            f"🎙️ **VC + GRP JOINING MENU**\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
             f"> **Current Status**: **{vc_status}**\n\n"
-            f"ℹ️ **How to use**:\n"
-            f"1. Click **🔗 Join Group + VC** to auto-join a group by invite link AND its active Voice Chat in one step.\n"
-            f"2. Or click **🎙️ Join VC Only** if your Userbot is already in the group — just send the group link/ID.\n"
-            f"3. Once connected, use the **Play Song** button or slash commands:\n"
-            f"   • `/play <song name>`: Stream audio in VC.\n"
-            f"   • `/vplay <song name>`: Stream video in VC.\n"
-            f"4. You can also **send an audio file** directly to play it in the VC.\n"
-            f"5. Click **Leave VC** to disconnect the Userbot from the call.\n\n"
-            f"⚠️ *Note: Make sure your Userbot is already in the VC before trying to stream audio/video!*"
+            f"👥 **Group Joining Module**:\n"
+            f"• Join Group: Userbot joins a group via invite link.\n"
+            f"• Leave Group: Userbot leaves a group/channel.\n\n"
+            f"🎙️ **VC Module**:\n"
+            f"• Join VC: Connects userbot to group voice chat.\n"
+            f"• Leave VC: Disconnects userbot from group voice chat.\n\n"
+            f"🎵 **Playing Module**:\n"
+            f"• Play Song: Stream audio/video or play uploaded files."
         )
         
         buttons = [
             [
-                utils.styled_button("🔗 Join Group + VC", f"vc_join_grp_{phone}", style="success"),
-                utils.styled_button(utils.get_text("btn_vc_join", lang), f"vc_join_{phone}", style="primary"),
+                utils.styled_button("🔗 Join Group", f"vc_join_grp_{phone}", style="success"),
+                utils.styled_button("❌ Leave Group", f"vc_leave_grp_{phone}", style="danger")
             ],
             [
-                utils.styled_button(utils.get_text("btn_vc_leave", lang), f"vc_leave_{phone}", style="danger")
+                utils.styled_button("🎙️ Join VC", f"vc_join_{phone}", style="success"),
+                utils.styled_button("🔴 Leave VC", f"vc_leave_{phone}", style="danger")
             ],
             [
-                utils.styled_button("🎵 Play Song", f"play_song_{phone}", style="success")
+                utils.styled_button("🎵 Play Song", f"play_song_{phone}", style="primary")
             ],
             [
                 utils.styled_button("🔙 Back to Dashboard", f"select_bot_{phone}", style="primary")
@@ -437,7 +439,6 @@ def register_handlers(client):
             await event.edit(text, buttons=buttons)
         except Exception:
             await event.respond(text, buttons=buttons)
-
 
     @client.on(events.CallbackQuery(pattern="^all_slots_vc_menu$"))
     async def all_slots_vc_menu_callback(event):
@@ -460,27 +461,30 @@ def register_handlers(client):
         )
         
         text = (
-            f"🎙️ **Bulk Voice Chat Settings Menu**\n"
+            f"🎙️ **VC + GRP JOINING MENU (ALL SLOTS)**\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
             f"> **VC Connected Bots**: **{vc_connected_count} / {len(running_phones)}**\n\n"
-            f"ℹ️ **How to use (Bulk)**:\n"
-            f"1. Click **🔗 Join Group + VC (All)** to auto-join a group by invite link AND its VC on ALL userbots in one step.\n"
-            f"2. Or click **🎙️ Join VC (All)** if all userbots are already in the group — just send the group link/ID.\n"
-            f"3. Use the **Play Song (All)** button, `/play` / `/vplay` or send an audio file to stream on all connected userbots.\n"
-            f"4. Click **Leave VC (All)** to disconnect all userbots at once.\n\n"
-            f"⚠️ *Note: Make sure your Userbots are already in the VC before trying to stream audio/video!*"
+            f"👥 **Group Joining Module (All)**:\n"
+            f"• Join Group: All running userbots join a group.\n"
+            f"• Leave Group: All running userbots leave a group.\n\n"
+            f"🎙️ **VC Module (All)**:\n"
+            f"• Join VC: Connect all running userbots to VC.\n"
+            f"• Leave VC: Disconnect all running userbots from VC.\n\n"
+            f"🎵 **Playing Module (All)**:\n"
+            f"• Play Song: Stream on all running userbots."
         )
         
         buttons = [
             [
-                utils.styled_button("🔗 Join Group + VC (All)", "all_slots_vc_join_grp", style="success"),
-                utils.styled_button(utils.get_text("btn_vc_join", lang) + " (All)", "all_slots_vc_join", style="primary"),
+                utils.styled_button("🔗 Join Group (All)", "all_slots_vc_join_grp", style="success"),
+                utils.styled_button("❌ Leave Group (All)", "all_slots_vc_leave_grp", style="danger")
             ],
             [
-                utils.styled_button(utils.get_text("btn_vc_leave", lang) + " (All)", "all_slots_vc_leave", style="danger")
+                utils.styled_button("🎙️ Join VC (All)", "all_slots_vc_join", style="success"),
+                utils.styled_button("🔴 Leave VC (All)", "all_slots_vc_leave", style="danger")
             ],
             [
-                utils.styled_button("🎵 Play Song (All)", "all_slots_play_song", style="success")
+                utils.styled_button("🎵 Play Song (All)", "all_slots_play_song", style="primary")
             ],
             [
                 utils.styled_button("🔙 Back", "menu_all_slots", style="primary")
@@ -490,7 +494,6 @@ def register_handlers(client):
             await event.edit(text, buttons=buttons)
         except Exception:
             await event.respond(text, buttons=buttons)
-
 
     @client.on(events.CallbackQuery(pattern=r"^vc_leave_(.+)$"))
     async def vc_leave_callback(event):
@@ -507,6 +510,56 @@ def register_handlers(client):
         
         from .my_bots import show_bot_dashboard
         await show_bot_dashboard(event, phone, user_id, flash_message=msg)
+
+    @client.on(events.CallbackQuery(pattern=r"^vc_leave_grp_(.+)$"))
+    async def vc_leave_grp_callback(event):
+        phone = event.pattern_match.group(1).strip()
+        user_id = event.sender_id
+        if not userbot_manager.is_bot_running(phone):
+            await event.answer("⚠️ Userbot must be running to leave a group.", alert=True)
+            return
+            
+        _bot_action_states[user_id] = {
+            "phone": phone,
+            "action": "WAITING_FOR_LEAVE_GRP"
+        }
+        
+        prompt_text = (
+            "❌ **Leave Group / Channel**\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "> Send the **Group invite link**, **Username**, or **Chat ID** of the group you want the userbot to leave.\n\n"
+            "✍️ **Send the link or ID below:**"
+        )
+        buttons = [[utils.styled_button("🔙 Cancel", f"vc_menu_{phone}", style="primary")]]
+        try:
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_vc_leave_grp$"))
+    async def all_slots_vc_leave_grp_callback(event):
+        user_id = event.sender_id
+        sessions = database.get_sessions(user_id)
+        running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
+        if not running_phones:
+            await event.answer("⚠️ Please start at least one userbot first!", alert=True)
+            return
+            
+        _bot_action_states[user_id] = {
+            "action": "WAITING_FOR_ALL_LEAVE_GRP"
+        }
+        
+        prompt_text = (
+            "❌ **Leave Group / Channel (All Slots)**\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "> Send the **Group invite link**, **Username**, or **Chat ID** of the group you want ALL running userbots to leave.\n\n"
+            "✍️ **Send the link or ID below:**"
+        )
+        buttons = [[utils.styled_button("🔙 Cancel", "all_slots_vc_menu", style="primary")]]
+        try:
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text, buttons=buttons)
 
     @client.on(events.CallbackQuery(pattern="^all_slots_vc_leave$"))
     async def all_slots_vc_leave_callback(event):
@@ -1887,6 +1940,13 @@ def register_handlers(client):
                             await client.delete_messages(event.chat_id, sent_msg.id)
                         except Exception:
                             pass
+                        file_path = song_info_global.get("file_path")
+                        if file_path and os.path.exists(file_path) and "silence.mp3" not in file_path:
+                            try:
+                                os.remove(file_path)
+                                logger.info(f"Deleted local song file: {file_path}")
+                            except Exception as e:
+                                logger.warning(f"Could not delete local file {file_path}: {e}")
                     asyncio.create_task(auto_delete())
             else:
                 await event.reply("❌ Failed to play song/video on any active Voice Chat.")
@@ -1951,6 +2011,33 @@ def register_handlers(client):
             if not link:
                 await event.reply("❌ Group invite link cannot be empty.")
                 return
+
+        elif action == "WAITING_FOR_ALL_LEAVE_GRP":
+            link = event.text.strip()
+            if not link:
+                await event.reply("❌ Input cannot be empty.")
+                return
+                
+            sessions = database.get_sessions(user_id)
+            running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
+            if not running_phones:
+                await event.reply("❌ No userbots are currently running.")
+                return
+                
+            progress_msg = await event.reply(f"⏳ **Leaving group concurrently on {len(running_phones)} userbots...**")
+            
+            async def _leave_grp_concurrent(phone_num):
+                bot_obj = userbot_manager._running_bots[phone_num]
+                success = await leave_chat_single(bot_obj.client, link)
+                return phone_num, success
+                
+            results = await asyncio.gather(*[_leave_grp_concurrent(p) for p in running_phones], return_exceptions=True)
+            await progress_msg.delete()
+            
+            success_count = sum(1 for r in results if not isinstance(r, Exception) and r[1])
+            flash = f"❌ **Group Leave Results**:\nLeft: {success_count}/{len(running_phones)} userbots successfully!"
+            await show_all_slots_dashboard(event, user_id, flash_message=flash)
+            return
                 
             sessions = database.get_sessions(user_id)
             running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
@@ -2185,6 +2272,13 @@ def register_handlers(client):
                             await client.delete_messages(event.chat_id, sent_msg.id)
                         except Exception:
                             pass
+                        file_path = song_info_global.get("file_path")
+                        if file_path and os.path.exists(file_path) and "silence.mp3" not in file_path:
+                            try:
+                                os.remove(file_path)
+                                logger.info(f"Deleted local song file: {file_path}")
+                            except Exception as e:
+                                logger.warning(f"Could not delete local file {file_path}: {e}")
                     asyncio.create_task(auto_delete())
                     
                 flash = f"✅ **Playing song**: {song_info_global['title']}"
@@ -2243,6 +2337,30 @@ def register_handlers(client):
             if not link:
                 await event.reply("❌ Group invite link cannot be empty.")
                 return
+
+        # 2.7 Leave Group via Link/ID (Single Bot)
+        elif action == "WAITING_FOR_LEAVE_GRP":
+            link = event.text.strip()
+            if not link:
+                await event.reply("❌ Input cannot be empty.")
+                return
+                
+            if not userbot_manager.is_bot_running(phone):
+                await event.reply("❌ Userbot is not running.")
+                return
+                
+            progress_msg = await event.reply("⏳ **Leaving group/channel, please wait...**")
+            bot_obj = userbot_manager._running_bots[phone]
+            success = await leave_chat_single(bot_obj.client, link)
+            await progress_msg.delete()
+            
+            if success:
+                flash = f"✅ **Successfully left the group/channel!**"
+            else:
+                flash = "❌ **Failed to leave the group. Check link/ID.**"
+                
+            await show_bot_dashboard(event, phone, user_id, flash_message=flash)
+            return
                 
             if not userbot_manager.is_bot_running(phone):
                 await event.reply("❌ Userbot is not running.")
@@ -2395,6 +2513,13 @@ def register_handlers(client):
                             await client.delete_messages(event.chat_id, sent_msg.id)
                         except Exception:
                             pass
+                        file_path = song_info.get("file_path")
+                        if file_path and os.path.exists(file_path) and "silence.mp3" not in file_path:
+                            try:
+                                os.remove(file_path)
+                                logger.info(f"Deleted local song file: {file_path}")
+                            except Exception as e:
+                                logger.warning(f"Could not delete local file {file_path}: {e}")
                     asyncio.create_task(auto_delete())
                     
                 flash = f"✅ **Playing song**: {song_info['title']}"
