@@ -110,10 +110,21 @@ async def download_media(query: str, download_type: str = "audio") -> tuple:
             for i, x in enumerate(reversed(duration.split(":")))
         )
 
+        # Check if file already exists in downloads (with any extension)
+        existing_file = None
+        if os.path.exists(DOWNLOAD_DIR):
+            for fname in os.listdir(DOWNLOAD_DIR):
+                if fname.startswith(vidid) and os.path.getsize(os.path.join(DOWNLOAD_DIR, fname)) > 0:
+                    existing_file = os.path.join(DOWNLOAD_DIR, fname)
+                    break
+                
+        if existing_file:
+            logger.info(f"Using cached file: {existing_file}")
+            return existing_file, title, duration_sec, thumb
+
+        # Define file path for remote API download (if used)
         ext = "mp3" if download_type == "audio" else "mp4"
         file_path = os.path.join(DOWNLOAD_DIR, f"{vidid}.{ext}")
-        if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
-            return file_path, title, duration_sec, thumb
 
         # Use local yt-dlp directly for video since remote API returns 503
         use_local = (download_type == "video")
@@ -152,7 +163,7 @@ async def download_media(query: str, download_type: str = "audio") -> tuple:
                     if download_type == "audio":
                         ydl_opts = {
                             'format': 'bestaudio/best',
-                            'outtmpl': file_path.replace('.mp3', '.%(ext)s'),
+                            'outtmpl': os.path.join(DOWNLOAD_DIR, f"{vidid}.%(ext)s"),
                             'postprocessors': [{
                                 'key': 'FFmpegExtractAudio',
                                 'preferredcodec': 'mp3',
@@ -163,26 +174,32 @@ async def download_media(query: str, download_type: str = "audio") -> tuple:
                         }
                         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                             ydl.download([youtube_url])
-                        return os.path.exists(file_path)
                     else:
                         ydl_opts = {
                             'format': 'best[ext=mp4]/best',
-                            'outtmpl': file_path,
+                            'outtmpl': os.path.join(DOWNLOAD_DIR, f"{vidid}.%(ext)s"),
                             'quiet': True,
                             'no_warnings': True,
                         }
                         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                             ydl.download([youtube_url])
-                        return os.path.exists(file_path)
+                            
+                    # Scan directory to find the downloaded file name
+                    for fname in os.listdir(DOWNLOAD_DIR):
+                        if fname.startswith(vidid):
+                            full_p = os.path.join(DOWNLOAD_DIR, fname)
+                            if os.path.getsize(full_p) > 0:
+                                return full_p
+                    return None
                 except Exception as dl_ex:
                     logger.error(f"yt-dlp sync download exception: {dl_ex}")
-                    return False
+                    return None
                     
             loop = asyncio.get_running_loop()
-            success = await loop.run_in_executor(None, _dl_sync)
-            if success:
-                logger.info(f"Successfully downloaded {download_type} locally using yt-dlp.")
-                return file_path, title, duration_sec, thumb
+            downloaded_file = await loop.run_in_executor(None, _dl_sync)
+            if downloaded_file and os.path.exists(downloaded_file):
+                logger.info(f"Successfully downloaded {download_type} locally: {downloaded_file}")
+                return downloaded_file, title, duration_sec, thumb
             else:
                 logger.error(f"Local yt-dlp download failed.")
                 return None, None, None, None
