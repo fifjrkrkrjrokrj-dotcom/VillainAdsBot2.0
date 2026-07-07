@@ -86,8 +86,8 @@ async def show_main_menu(event, user_id):
             styled_button("👫 Refer & Earn", "settings_referrals", style="success")
         ],
         [
-            Button.url("👑 Owner 1", "https://t.me/v90001"),
-            Button.url("👑 Owner 2", "https://t.me/BL4ZEXSOUL")
+            Button.url(config.OWNER_1_NAME, config.OWNER_1_URL),
+            Button.url(config.OWNER_2_NAME, config.OWNER_2_URL)
         ],
         [
             Button.url("📢 Support Channel", "https://t.me/+Qzy2vnoy3g00OTE1"),

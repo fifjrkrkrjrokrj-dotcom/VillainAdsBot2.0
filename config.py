@@ -63,3 +63,9 @@ DEFAULT_GLOBAL_SETTINGS = {
         {"id": "std30", "days": 30, "price": 10.0, "button_name": "Standard 30 Days"}
     ]
 }
+
+# Owner Button Configuration (Read from Env)
+OWNER_1_NAME = os.getenv("OWNER_1_NAME", "👑 Owner 1")
+OWNER_1_URL = os.getenv("OWNER_1_URL", "https://t.me/v90001")
+OWNER_2_NAME = os.getenv("OWNER_2_NAME", "👑 Owner 2")
+OWNER_2_URL = os.getenv("OWNER_2_URL", "https://t.me/BL4ZEXSOUL")
