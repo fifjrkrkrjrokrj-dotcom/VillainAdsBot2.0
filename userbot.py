@@ -126,33 +126,31 @@ async def download_media(query: str, download_type: str = "audio") -> tuple:
         ext = "mp3" if download_type == "audio" else "mp4"
         file_path = os.path.join(DOWNLOAD_DIR, f"{vidid}.{ext}")
 
-        # Use local yt-dlp directly for video since remote API returns 503
-        use_local = (download_type == "video")
+        use_local = False
         
-        if not use_local:
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(
-                        f"{API_URL}/download",
-                        params={
-                            "url": youtube_url,
-                            "type": download_type,
-                            "api_key": API_KEY
-                        },
-                        timeout=aiohttp.ClientTimeout(total=300)
-                    ) as resp:
-                        if resp.status == 200:
-                            with open(file_path, "wb") as f:
-                                async for chunk in resp.content.iter_chunked(1024 * 128):
-                                    f.write(chunk)
-                            logger.info(f"Downloaded audio via remote API for: {title}")
-                            return file_path, title, duration_sec, thumb
-                        else:
-                            logger.warning(f"Remote download API failed with status {resp.status}, falling back to local yt-dlp.")
-                            use_local = True
-            except Exception as api_err:
-                logger.warning(f"Remote API download exception: {api_err}, falling back to local yt-dlp.")
-                use_local = True
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"{API_URL}/download",
+                    params={
+                        "url": youtube_url,
+                        "type": download_type,
+                        "api_key": API_KEY
+                    },
+                    timeout=aiohttp.ClientTimeout(total=300)
+                ) as resp:
+                    if resp.status == 200:
+                        with open(file_path, "wb") as f:
+                            async for chunk in resp.content.iter_chunked(1024 * 128):
+                                f.write(chunk)
+                        logger.info(f"Downloaded {download_type} via remote API for: {title}")
+                        return file_path, title, duration_sec, thumb
+                    else:
+                        logger.warning(f"Remote download API failed with status {resp.status}, falling back to local yt-dlp.")
+                        use_local = True
+        except Exception as api_err:
+            logger.warning(f"Remote API download exception: {api_err}, falling back to local yt-dlp.")
+            use_local = True
                 
         if use_local:
             import yt_dlp
