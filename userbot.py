@@ -72,7 +72,6 @@ except Exception as patch_err:
 import aiohttp
 from pytgcalls import PyTgCalls
 from pytgcalls.types import AudioPiped
-from py_yt import VideosSearch
 
 API_URL = "https://api.shrutibots.site"
 API_KEY = "ShrutiBotsGMiLr8wF1tPbxVV6fRgH"
@@ -85,30 +84,44 @@ async def download_media(query: str, download_type: str = "audio") -> tuple:
     """
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
     try:
-        if not query.startswith("http"):
-            search = VideosSearch(query, limit=1)
-            res = await search.next()
-            if not res or not res.get("result"):
-                return None, None, None, None
-            result = res["result"][0]
-        else:
-            search = VideosSearch(query, limit=1)
-            res = await search.next()
-            if not res or not res.get("result"):
-                return None, None, None, None
-            result = res["result"][0]
+        import yt_dlp
+        
+        def _search_sync():
+            ydl_opts = {
+                'quiet': True,
+                'no_warnings': True,
+                'extract_flat': 'in_playlist',
+                'skip_download': True,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                search_query = query if query.startswith("http") else f"ytsearch1:{query}"
+                try:
+                    res = ydl.extract_info(search_query, download=False)
+                    if not res:
+                        return None
+                    if 'entries' in res:
+                        entries = res['entries']
+                        if not entries or not entries[0]:
+                            return None
+                        return entries[0]
+                    return res
+                except Exception as e:
+                    logger.error(f"yt-dlp search extraction failed: {e}")
+                    return None
 
-        title = result["title"]
-        duration = result.get("duration", "0:00")
-        thumb = result["thumbnails"][0]["url"].split("?")[0]
-        vidid = result["id"]
+        loop = asyncio.get_running_loop()
+        entry = await loop.run_in_executor(None, _search_sync)
+        if not entry:
+            return None, None, None, None
+            
+        title = entry.get("title") or "YouTube Video"
+        vidid = entry.get("id")
+        if not vidid:
+            return None, None, None, None
+            
         youtube_url = f"https://www.youtube.com/watch?v={vidid}"
-
-        # duration convert
-        duration_sec = sum(
-            int(x) * 60 ** i
-            for i, x in enumerate(reversed(duration.split(":")))
-        )
+        duration_sec = int(entry.get("duration") or 0)
+        thumb = entry.get("thumbnail") or f"https://img.youtube.com/vi/{vidid}/0.jpg"
 
         # Check if file already exists in downloads (with any extension)
         existing_file = None
@@ -703,6 +716,14 @@ class UserBot:
                 except Exception:
                     pass
                 
+            chat_id = entity.id
+            
+            # Join VC via Telethon protocol first (with muted=True) to establish connection and mute the mic!
+            try:
+                await join_vc(self.client, chat_id)
+            except Exception as jvc_err:
+                logger.warning(f"Protocol join_vc failed: {jvc_err}, continuing to PyTgCalls...")
+
             pytg = await self.get_pytgcalls()
             
             # Generate silence file to prevent auto-kick
@@ -710,7 +731,6 @@ class UserBot:
             if not silence_file or not os.path.exists(silence_file):
                 return False, "Failed to generate silence.mp3. Make sure FFmpeg is installed."
                 
-            chat_id = entity.id
             logger.info(f"Joining VC of {chat_id} using PyTgCalls with silence.mp3...")
             
             await pytg.join_group_call(
