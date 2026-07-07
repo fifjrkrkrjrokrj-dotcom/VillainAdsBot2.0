@@ -1990,7 +1990,14 @@ def register_handlers(client):
                     replied_audio = reply_msg
                     progress_download = await event.reply("📥 **Downloading replied media file...**")
                     os.makedirs("downloads", exist_ok=True)
-                    local_file_path = await replied_audio.download_media(file="downloads/")
+                    
+                    # Resolve first running userbot client to download 10x faster (bypasses bot throttling)
+                    dl_client = client
+                    if running_phones:
+                        first_bot = userbot_manager._running_bots.get(running_phones[0])
+                        if first_bot and first_bot.client:
+                            dl_client = first_bot.client
+                    local_file_path = await dl_client.download_media(replied_audio, file="downloads/")
                     await progress_download.delete()
             
             if not query and not replied_audio:
@@ -2317,7 +2324,16 @@ def register_handlers(client):
                 is_audio_file = True
                 progress_msg = await event.reply("📥 **Downloading uploaded media...**")
                 os.makedirs("downloads", exist_ok=True)
-                local_file_path = await event.message.download_media(file="downloads/")
+                
+                # Use first running userbot client to download 10x faster (bypasses bot throttling)
+                sessions = database.get_sessions(user_id)
+                running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
+                dl_client = client
+                if running_phones:
+                    first_bot = userbot_manager._running_bots.get(running_phones[0])
+                    if first_bot and first_bot.client:
+                        dl_client = first_bot.client
+                local_file_path = await dl_client.download_media(event.message, file="downloads/")
                 await progress_msg.delete()
             
             query = None
@@ -2570,7 +2586,11 @@ def register_handlers(client):
                 is_audio_file = True
                 progress_msg = await event.reply("📥 **Downloading uploaded media...**")
                 os.makedirs("downloads", exist_ok=True)
-                local_file_path = await event.message.download_media(file="downloads/")
+                
+                # Use userbot client to download 10x faster (bypasses bot throttling)
+                bot_obj = userbot_manager._running_bots.get(phone)
+                dl_client = bot_obj.client if (bot_obj and bot_obj.client) else client
+                local_file_path = await dl_client.download_media(event.message, file="downloads/")
                 await progress_msg.delete()
             
             query = None
