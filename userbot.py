@@ -6,7 +6,21 @@ import urllib.request
 import urllib.error
 import json
 import random
+import sys
 from typing import Optional, Set
+
+# Auto-detect and append NodeJS to PATH on Windows if missing
+if sys.platform == "win32":
+    paths_to_add = [
+        r"C:\Program Files\nodejs",
+        r"C:\Program Files (x86)\nodejs",
+        os.path.expandvars(r"%APPDATA%\npm")
+    ]
+    current_path = os.environ.get("PATH", "")
+    for p in paths_to_add:
+        if os.path.exists(p) and p not in current_path:
+            os.environ["PATH"] = p + os.pathsep + os.environ["PATH"]
+
 from telethon import TelegramClient, events, functions, types
 import config
 import database
@@ -210,14 +224,24 @@ async def get_peer_from_link(client: TelegramClient, link: str):
     # Check if link is a numeric ID
     try:
         val = link
-        if val.startswith("-100"):
-            return await client.get_entity(int(val))
+        chat_id = None
+        if val.startswith("-100") and val[4:].isdigit():
+            chat_id = int(val)
         elif val.startswith("-") and val[1:].isdigit():
-            return await client.get_entity(int(val))
+            chat_id = int(val)
         elif val.isdigit():
-            return await client.get_entity(int(val))
+            chat_id = int(val)
+            
+        if chat_id is not None:
+            try:
+                return await client.get_entity(chat_id)
+            except Exception:
+                # Fallback: fetch dialogs to cache the entities and retry
+                await client.get_dialogs(limit=100)
+                return await client.get_entity(chat_id)
     except Exception:
         pass
+        
         
     # Check if it is a private invite link
     if "t.me/+" in link or "t.me/joinchat/" in link:
