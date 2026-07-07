@@ -2022,21 +2022,23 @@ def register_handlers(client):
                     replied_audio = reply_msg
                     progress_download = await event.reply("📥 **Downloading replied media file...**\n━━━━━━━━━━━━━━━━━━━━\n📊 Progress: `[░░░░░░░░░░] 0.0%`")
                     os.makedirs("downloads", exist_ok=True)
-                    
-                    # Resolve first running userbot client to download 10x faster (bypasses bot throttling)
-                    dl_client = client
-                    if running_phones:
-                        first_bot = userbot_manager._running_bots.get(running_phones[0])
-                        if first_bot and first_bot.client:
-                            dl_client = first_bot.client
-                    local_file_path = await dl_client.download_media(
-                        replied_audio, 
-                        file="downloads/",
-                        progress_callback=lambda c, t: asyncio.create_task(
-                            download_progress(c, t, progress_download, "Downloading replied media file")
+                    try:
+                        local_file_path = await client.download_media(
+                            replied_audio, 
+                            file="downloads/",
+                            progress_callback=lambda c, t: asyncio.create_task(
+                                download_progress(c, t, progress_download, "Downloading replied media file")
+                            )
                         )
-                    )
-                    await progress_download.delete()
+                    except Exception as dl_err:
+                        logger.error(f"Failed to download replied media: {dl_err}")
+                        await progress_download.edit(f"❌ **Failed to download media:** {dl_err}")
+                        return
+                    finally:
+                        try:
+                            await progress_download.delete()
+                        except Exception:
+                            pass
             
             if not query and not replied_audio:
                 await event.reply("❌ Please provide a song/video name/link, or reply to an audio file.\nFormat: `/play <songname>` or `/vplay <songname>`")
@@ -2357,23 +2359,23 @@ def register_handlers(client):
                 is_audio_file = True
                 progress_msg = await event.reply("📥 **Downloading uploaded media...**\n━━━━━━━━━━━━━━━━━━━━\n📊 Progress: `[░░░░░░░░░░] 0.0%`")
                 os.makedirs("downloads", exist_ok=True)
-                
-                # Use first running userbot client to download 10x faster (bypasses bot throttling)
-                sessions = database.get_sessions(user_id)
-                running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
-                dl_client = client
-                if running_phones:
-                    first_bot = userbot_manager._running_bots.get(running_phones[0])
-                    if first_bot and first_bot.client:
-                        dl_client = first_bot.client
-                local_file_path = await dl_client.download_media(
-                    event.message, 
-                    file="downloads/",
-                    progress_callback=lambda c, t: asyncio.create_task(
-                        download_progress(c, t, progress_msg, "Downloading uploaded media")
+                try:
+                    local_file_path = await client.download_media(
+                        event.message, 
+                        file="downloads/",
+                        progress_callback=lambda c, t: asyncio.create_task(
+                            download_progress(c, t, progress_msg, "Downloading uploaded media")
+                        )
                     )
-                )
-                await progress_msg.delete()
+                except Exception as dl_err:
+                    logger.error(f"Failed to download media: {dl_err}")
+                    await progress_msg.edit(f"❌ **Failed to download media:** {dl_err}")
+                    return
+                finally:
+                    try:
+                        await progress_msg.delete()
+                    except Exception:
+                        pass
             
             query = None
             if not is_audio_file:
@@ -2625,18 +2627,23 @@ def register_handlers(client):
                 is_audio_file = True
                 progress_msg = await event.reply("📥 **Downloading uploaded media...**\n━━━━━━━━━━━━━━━━━━━━\n📊 Progress: `[░░░░░░░░░░] 0.0%`")
                 os.makedirs("downloads", exist_ok=True)
-                
-                # Use userbot client to download 10x faster (bypasses bot throttling)
-                bot_obj = userbot_manager._running_bots.get(phone)
-                dl_client = bot_obj.client if (bot_obj and bot_obj.client) else client
-                local_file_path = await dl_client.download_media(
-                    event.message, 
-                    file="downloads/",
-                    progress_callback=lambda c, t: asyncio.create_task(
-                        download_progress(c, t, progress_msg, "Downloading uploaded media")
+                try:
+                    local_file_path = await client.download_media(
+                        event.message, 
+                        file="downloads/",
+                        progress_callback=lambda c, t: asyncio.create_task(
+                            download_progress(c, t, progress_msg, "Downloading uploaded media")
+                        )
                     )
-                )
-                await progress_msg.delete()
+                except Exception as dl_err:
+                    logger.error(f"Failed to download media: {dl_err}")
+                    await progress_msg.edit(f"❌ **Failed to download media:** {dl_err}")
+                    return
+                finally:
+                    try:
+                        await progress_msg.delete()
+                    except Exception:
+                        pass
             
             query = None
             if not is_audio_file:
