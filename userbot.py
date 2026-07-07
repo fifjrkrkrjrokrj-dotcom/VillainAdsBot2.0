@@ -867,15 +867,12 @@ class UserBot:
         try:
             pytg = await self.get_pytgcalls()
             
-            if play_type == "video" and file_path.lower().endswith(".mp4"):
+            if play_type == "video":
                 from pytgcalls.types import AudioVideoPiped
                 stream_obj = AudioVideoPiped(file_path)
                 logger.info(f"Streaming video (AudioVideoPiped): {file_path}")
             else:
-                # For non-mp4 video files (webm/mkv), fall back to audio-only streaming
                 stream_obj = AudioPiped(file_path)
-                if play_type == "video":
-                    logger.warning(f"Non-mp4 video file ({file_path}), streaming audio-only via AudioPiped.")
                 
             try:
                 # We are already in the call (with silence), so we change the stream!
