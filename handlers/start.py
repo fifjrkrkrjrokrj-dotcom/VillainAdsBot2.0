@@ -72,6 +72,9 @@ async def show_main_menu(event, user_id):
     admins_list = global_settings.get("admins", [])
     is_admin = user_id in admins_list or user_id in config.ORIGINAL_ADMIN_IDS
     
+    support_channel = global_settings.get("support_channel") or "https://t.me/+Qzy2vnoy3g00OTE1"
+    support_group = global_settings.get("support_group") or "https://t.me/+DlgFzulC_JY5OWI1"
+    
     # Configure main menu dashboard buttons
     buttons = [
         [
@@ -90,8 +93,8 @@ async def show_main_menu(event, user_id):
             Button.url(config.OWNER_2_NAME, config.OWNER_2_URL)
         ],
         [
-            Button.url("📢 Support Channel", "https://t.me/+Qzy2vnoy3g00OTE1"),
-            Button.url("💬 Support Group", "https://t.me/+DlgFzulC_JY5OWI1")
+            Button.url("📢 Support Channel", support_channel),
+            Button.url("💬 Support Group", support_group)
         ]
     ]
     
