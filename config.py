@@ -23,7 +23,7 @@ original_admin_ids_str = os.getenv("ORIGINAL_ADMIN_IDS", "")
 ORIGINAL_ADMIN_IDS = set()
 if original_admin_ids_str:
     for x in original_admin_ids_str.split(","):
-        x = x.strip()
+        x = x.strip().replace('"', '').replace("'", "")
         if x.isdigit():
             ORIGINAL_ADMIN_IDS.add(int(x))
 
