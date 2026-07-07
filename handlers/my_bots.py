@@ -1,7 +1,8 @@
 import logging
 import asyncio
+import os
 from typing import Optional, Set
-from telethon import events
+from telethon import events, Button
 import database
 import models
 import utils
@@ -10,6 +11,10 @@ import userbot_manager
 from userbot import join_vc_by_link, leave_chat_single
 
 logger = logging.getLogger(__name__)
+
+# Global in-memory autoplay state per user (also referenced in callback handlers)
+_np_autoplay_state = {}
+
 
 def extract_media_info(msg):
     """
@@ -639,6 +644,62 @@ def register_handlers(client):
         success, msg = await bot_obj.stop_song()
         await event.answer(msg, alert=True)
         await vc_menu_callback(event)
+
+    # ---------- Now Playing Inline Buttons (skip/end/autoplay) ----------
+    @client.on(events.CallbackQuery(pattern=r"^np_skip_all_(\d+)$"))
+    async def np_skip_all_callback(event):
+        """Skip current song on all active VC userbots (triggered from Now Playing message)."""
+        user_id = int(event.pattern_match.group(1))
+        if event.sender_id != user_id:
+            await event.answer("⛔ This button is not for you.", alert=True)
+            return
+        sessions = database.get_sessions(user_id)
+        running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
+        vc_bots = [(p, userbot_manager._running_bots[p]) for p in running_phones
+                   if getattr(userbot_manager._running_bots[p], "current_vc_chat_id", None)]
+        if not vc_bots:
+            await event.answer("⚠️ No active VC bots found.", alert=True)
+            return
+        await asyncio.gather(*[bot.stop_song() for _, bot in vc_bots], return_exceptions=True)
+        await event.answer("⏭️ Skipped on all active VCs!", alert=True)
+        try:
+            await event.edit(buttons=None)
+        except Exception:
+            pass
+
+    @client.on(events.CallbackQuery(pattern=r"^np_end_all_(\d+)$"))
+    async def np_end_all_callback(event):
+        """End song and mute all active VC userbots (triggered from Now Playing message)."""
+        user_id = int(event.pattern_match.group(1))
+        if event.sender_id != user_id:
+            await event.answer("⛔ This button is not for you.", alert=True)
+            return
+        sessions = database.get_sessions(user_id)
+        running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
+        vc_bots = [(p, userbot_manager._running_bots[p]) for p in running_phones
+                   if getattr(userbot_manager._running_bots[p], "current_vc_chat_id", None)]
+        if not vc_bots:
+            await event.answer("⚠️ No active VC bots found.", alert=True)
+            return
+        await asyncio.gather(*[bot.stop_song() for _, bot in vc_bots], return_exceptions=True)
+        await event.answer("🛑 Stopped playback on all active VCs!", alert=True)
+        try:
+            await event.edit(buttons=None)
+        except Exception:
+            pass
+
+    @client.on(events.CallbackQuery(pattern=r"^np_autoplay_(\d+)$"))
+    async def np_autoplay_callback(event):
+        """Toggle autoplay loop for all active VC userbots."""
+        user_id = int(event.pattern_match.group(1))
+        if event.sender_id != user_id:
+            await event.answer("⛔ This button is not for you.", alert=True)
+            return
+        current = _np_autoplay_state.get(user_id, False)
+        _np_autoplay_state[user_id] = not current
+        state_text = "🔁 ON" if _np_autoplay_state[user_id] else "➡️ OFF"
+        await event.answer(f"Autoplay set to {state_text}", alert=True)
+
 
     @client.on(events.CallbackQuery(pattern="^all_slots_vc_mute$"))
     async def all_slots_vc_mute_callback(event):
@@ -2088,30 +2149,65 @@ def register_handlers(client):
                     f"> \n"
                     f"> 🎧 _Playing on {success_count} userbot(s) in Voice Chats!_"
                 )
+                autoplay_on = _np_autoplay_state.get(user_id, False)
+                autoplay_label = "🔁 Autoplay: ON" if autoplay_on else "➡️ Autoplay: OFF"
+                np_buttons = [
+                    [
+                        Button.inline("⏭️ Skip Song", data=f"np_skip_all_{user_id}"),
+                        Button.inline("🛑 End Song", data=f"np_end_all_{user_id}"),
+                    ],
+                    [
+                        Button.inline(autoplay_label, data=f"np_autoplay_{user_id}"),
+                    ],
+                ]
                 sent_msg = None
                 try:
-                    sent_msg = await event.reply(caption, file=song_info_global["thumb"])
+                    sent_msg = await event.reply(caption, file=song_info_global["thumb"], buttons=np_buttons)
                 except Exception:
                     try:
-                        sent_msg = await event.reply(caption)
+                        sent_msg = await event.reply(caption, buttons=np_buttons)
                     except Exception:
                         pass
                         
                 if sent_msg:
-                    async def auto_delete():
-                        await asyncio.sleep(song_info_global["duration"])
+                    _song_duration = song_info_global["duration"]
+                    _song_query = query or song_info_global.get("title", "")
+                    _song_play_type = play_type
+                    _song_file = local_file_path
+                    _song_title = audio_title
+                    _song_dur_orig = audio_duration
+                    
+                    async def auto_delete_and_autoplay():
+                        await asyncio.sleep(_song_duration)
                         try:
                             await client.delete_messages(event.chat_id, sent_msg.id)
                         except Exception:
                             pass
-                        file_path = song_info_global.get("file_path")
-                        if file_path and os.path.exists(file_path) and "silence.mp3" not in file_path:
+                        # Autoplay: replay same song if enabled
+                        if _np_autoplay_state.get(user_id, False):
                             try:
-                                os.remove(file_path)
-                                logger.info(f"Deleted local song file: {file_path}")
+                                vc_bots_now = [(p, userbot_manager._running_bots[p]) for p in [
+                                    s["phone"] for s in database.get_sessions(user_id)
+                                    if userbot_manager.is_bot_running(s["phone"])
+                                ] if getattr(userbot_manager._running_bots.get(p), "current_vc_chat_id", None)]
+                                if vc_bots_now:
+                                    await asyncio.gather(
+                                        *[bot.play_song(_song_query, play_type=_song_play_type,
+                                                        local_file=_song_file, title=_song_title,
+                                                        duration=_song_dur_orig)
+                                          for _, bot in vc_bots_now],
+                                        return_exceptions=True
+                                    )
+                            except Exception as ap_err:
+                                logger.warning(f"Autoplay loop failed: {ap_err}")
+                        file_path_cleanup = song_info_global.get("file_path")
+                        if file_path_cleanup and os.path.exists(file_path_cleanup) and "silence" not in file_path_cleanup:
+                            try:
+                                os.remove(file_path_cleanup)
+                                logger.info(f"Deleted local song file: {file_path_cleanup}")
                             except Exception as e:
-                                logger.warning(f"Could not delete local file {file_path}: {e}")
-                    asyncio.create_task(auto_delete())
+                                logger.warning(f"Could not delete local file {file_path_cleanup}: {e}")
+                    asyncio.create_task(auto_delete_and_autoplay())
             else:
                 await event.reply("❌ Failed to play song/video on any active Voice Chat.")
             return
