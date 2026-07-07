@@ -176,7 +176,7 @@ async def download_media(query: str, download_type: str = "audio") -> tuple:
                             ydl.download([youtube_url])
                     else:
                         ydl_opts = {
-                            'format': 'best[ext=mp4]/best',
+                            'format': 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
                             'outtmpl': os.path.join(DOWNLOAD_DIR, f"{vidid}.%(ext)s"),
                             'quiet': True,
                             'no_warnings': True,
@@ -860,9 +860,13 @@ class UserBot:
         else:
             # Download the media
             logger.info(f"Userbot {self.session_id} downloading {play_type} query: {query}")
-            file_path, title, duration, thumb = await download_media(query, download_type=play_type)
+            try:
+                file_path, title, duration, thumb = await download_media(query, download_type=play_type)
+            except Exception as dl_err:
+                return False, f"YouTube download failed: {dl_err}", None
+                
             if not file_path:
-                return False, "Failed to download/search the media.", None
+                return False, "Failed to download or parse media from YouTube. The link might be broken or region-restricted.", None
             
         try:
             pytg = await self.get_pytgcalls()

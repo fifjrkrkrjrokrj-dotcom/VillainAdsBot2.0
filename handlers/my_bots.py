@@ -2065,152 +2065,181 @@ def register_handlers(client):
             
         user_id = event.sender_id
         
-        # Check for /play and /vplay commands first
+        # Check for any slash command first
         cmd_text = event.text.strip() if event.text else ""
-        if cmd_text.startswith("/play") or cmd_text.startswith("/vplay"):
+        if cmd_text.startswith("/"):
+            # Clear pending state on commands to prevent treating them as song query searches
+            if user_id in _bot_action_states:
+                _bot_action_states.pop(user_id)
+                
             parts = cmd_text.split(" ", 1)
             cmd = parts[0].lower()
-            query = parts[1].strip() if len(parts) > 1 else ""
             
-            # Retrieve sessions first to prevent NameError
-            sessions = database.get_sessions(user_id)
-            if not sessions:
-                await event.reply("❌ You do not have any userbot slots.")
+            # Handle Direct /skip and /end commands
+            if cmd in ["/skip", "/end"]:
+                sessions = database.get_sessions(user_id)
+                if not sessions:
+                    await event.reply("❌ You do not have any userbot slots.")
+                    return
+                running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
+                vc_bots = [userbot_manager._running_bots[p] for p in running_phones
+                           if getattr(userbot_manager._running_bots.get(p), "current_vc_chat_id", None)]
+                if not vc_bots:
+                    await event.reply("⚠️ None of your userbots are currently playing anything in Voice Chat.")
+                    return
+                
+                await asyncio.gather(*[bot.stop_song() for bot in vc_bots], return_exceptions=True)
+                action_name = "skipped" if cmd == "/skip" else "ended"
+                await event.reply(f"✅ Playback {action_name} successfully on all active Voice Chats!")
                 return
-            running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
-            
-            # Check reply for audio
-            replied_audio = None
-            local_file_path = None
-            audio_title = None
-            audio_duration = 30
-            
-            if event.message.is_reply:
-                reply_msg = await event.get_reply_message()
-                media_obj, audio_title, audio_duration = extract_media_info(reply_msg)
-                if media_obj:
-                    replied_audio = reply_msg
-                    progress_download = await event.reply("📥 **Downloading replied media file...**\n━━━━━━━━━━━━━━━━━━━━\n📊 Progress: `[░░░░░░░░░░] 0.0%`")
-                    try:
-                        local_file_path = await client.download_media(
-                            replied_audio, 
-                            file="downloads/",
-                            progress_callback=lambda c, t: download_progress_sync(c, t, progress_download, "Downloading replied media file")
-                        )
-                    except Exception as dl_err:
-                        logger.error(f"Failed to download replied media: {dl_err}")
-                        await progress_download.edit(f"❌ **Failed to download media:** {dl_err}")
-                        return
-                    finally:
+                
+            if cmd in ["/play", "/vplay"]:
+                query = parts[1].strip() if len(parts) > 1 else ""
+                
+                # Retrieve sessions first to prevent NameError
+                sessions = database.get_sessions(user_id)
+                if not sessions:
+                    await event.reply("❌ You do not have any userbot slots.")
+                    return
+                running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
+                
+                # Check reply for audio
+                replied_audio = None
+                local_file_path = None
+                audio_title = None
+                audio_duration = 30
+                
+                if event.message.is_reply:
+                    reply_msg = await event.get_reply_message()
+                    media_obj, audio_title, audio_duration = extract_media_info(reply_msg)
+                    if media_obj:
+                        replied_audio = reply_msg
+                        progress_download = await event.reply("📥 **Downloading replied media file...**\n━━━━━━━━━━━━━━━━━━━━\n📊 Progress: `[░░░░░░░░░░] 0.0%`")
                         try:
-                            await progress_download.delete()
-                        except Exception:
-                            pass
-            
-            if not query and not replied_audio:
-                await event.reply("❌ Please provide a song/video name/link, or reply to an audio file.\nFormat: `/play <songname>` or `/vplay <songname>`")
-                return
+                            local_file_path = await client.download_media(
+                                replied_audio, 
+                                file="downloads/",
+                                progress_callback=lambda c, t: download_progress_sync(c, t, progress_download, "Downloading replied media file")
+                            )
+                        except Exception as dl_err:
+                            logger.error(f"Failed to download replied media: {dl_err}")
+                            await progress_download.edit(f"❌ **Failed to download media:** {dl_err}")
+                            return
+                        finally:
+                            try:
+                                await progress_download.delete()
+                            except Exception:
+                                pass
                 
-            play_type = "video" if cmd == "/vplay" else "audio"
-                
-            running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
-            vc_bots = []
-            for p in running_phones:
-                bot_obj = userbot_manager._running_bots[p]
-                if getattr(bot_obj, "current_vc_chat_id", None):
-                    vc_bots.append((p, bot_obj))
+                if not query and not replied_audio:
+                    await event.reply("❌ Please provide a song/video name/link, or reply to an audio file.\nFormat: `/play <songname>` or `/vplay <songname>`")
+                    return
                     
-            if not vc_bots:
-                await event.reply("❌ None of your running userbots are in a Voice Chat. Make them join a VC first!")
-                return
+                play_type = "video" if cmd == "/vplay" else "audio"
                 
-            progress_msg = await event.reply(f"⏳ **Starting play on {len(vc_bots)} userbot(s) concurrently...**")
-            
-            async def _play_one_concurrent(p, bot_obj):
-                return await bot_obj.play_song(query, play_type=play_type, local_file=local_file_path, title=audio_title, duration=audio_duration)
-                
-            results = await asyncio.gather(*[_play_one_concurrent(p, bot) for p, bot in vc_bots], return_exceptions=True)
-            await progress_msg.delete()
-            
-            success_count = 0
-            song_info_global = None
-            for res in results:
-                if not isinstance(res, Exception) and res[0]:
-                    success_count += 1
-                    song_info_global = res[2]
-            
-            if success_count > 0 and song_info_global:
-                caption = (
-                    f"> 🎵 **Now Playing ({play_type.capitalize()} Mode)**\n"
-                    f"> \n"
-                    f"> • **Title**: `{song_info_global['title']}`\n"
-                    f"> • **Duration**: `{song_info_global['duration']}s`\n"
-                    f"> • **Requested by**: [{event.sender.first_name or 'User'}](tg://user?id={user_id})\n"
-                    f"> \n"
-                    f"> 🎧 _Playing on {success_count} userbot(s) in Voice Chats!_"
-                )
-                autoplay_on = _np_autoplay_state.get(user_id, False)
-                autoplay_label = "🔁 Autoplay: ON" if autoplay_on else "➡️ Autoplay: OFF"
-                np_buttons = [
-                    [
-                        Button.inline("⏭️ Skip Song", data=f"np_skip_all_{user_id}"),
-                        Button.inline("🛑 End Song", data=f"np_end_all_{user_id}"),
-                    ],
-                    [
-                        Button.inline(autoplay_label, data=f"np_autoplay_{user_id}"),
-                    ],
-                ]
-                sent_msg = None
-                try:
-                    sent_msg = await event.reply(caption, file=song_info_global["thumb"], buttons=np_buttons)
-                except Exception:
-                    try:
-                        sent_msg = await event.reply(caption, buttons=np_buttons)
-                    except Exception:
-                        pass
+                vc_bots = []
+                for p in running_phones:
+                    bot_obj = userbot_manager._running_bots[p]
+                    if getattr(bot_obj, "current_vc_chat_id", None):
+                        vc_bots.append((p, bot_obj))
                         
-                if sent_msg:
-                    _song_duration = song_info_global["duration"]
-                    _song_query = query or song_info_global.get("title", "")
-                    _song_play_type = play_type
-                    _song_file = local_file_path
-                    _song_title = audio_title
-                    _song_dur_orig = audio_duration
+                if not vc_bots:
+                    await event.reply("❌ None of your running userbots are in a Voice Chat. Make them join a VC first!")
+                    return
                     
-                    async def auto_delete_and_autoplay():
-                        await asyncio.sleep(_song_duration)
+                progress_msg = await event.reply(f"⏳ **Starting play on {len(vc_bots)} userbot(s) concurrently...**")
+                
+                async def _play_one_concurrent(p, bot_obj):
+                    return await bot_obj.play_song(query, play_type=play_type, local_file=local_file_path, title=audio_title, duration=audio_duration)
+                    
+                results = await asyncio.gather(*[_play_one_concurrent(p, bot) for p, bot in vc_bots], return_exceptions=True)
+                await progress_msg.delete()
+                
+                success_count = 0
+                song_info_global = None
+                error_details = []
+                for res in results:
+                    if isinstance(res, Exception):
+                        error_details.append(str(res))
+                    elif res[0]:
+                        success_count += 1
+                        song_info_global = res[2]
+                    else:
+                        error_details.append(res[1])
+                
+                if success_count > 0 and song_info_global:
+                    caption = (
+                        f"> 🎵 **Now Playing ({play_type.capitalize()} Mode)**\n"
+                        f"> \n"
+                        f"> • **Title**: `{song_info_global['title']}`\n"
+                        f"> • **Duration**: `{song_info_global['duration']}s`\n"
+                        f"> • **Requested by**: [{event.sender.first_name or 'User'}](tg://user?id={user_id})\n"
+                        f"> \n"
+                        f"> 🎧 _Playing on {success_count} userbot(s) in Voice Chats!_"
+                    )
+                    autoplay_on = _np_autoplay_state.get(user_id, False)
+                    autoplay_label = "🔁 Autoplay: ON" if autoplay_on else "➡️ Autoplay: OFF"
+                    np_buttons = [
+                        [
+                            Button.inline("⏭️ Skip Song", data=f"np_skip_all_{user_id}"),
+                            Button.inline("🛑 End Song", data=f"np_end_all_{user_id}"),
+                        ],
+                        [
+                            Button.inline(autoplay_label, data=f"np_autoplay_{user_id}"),
+                        ],
+                    ]
+                    sent_msg = None
+                    try:
+                        sent_msg = await event.reply(caption, file=song_info_global["thumb"], buttons=np_buttons)
+                    except Exception:
                         try:
-                            await client.delete_messages(event.chat_id, sent_msg.id)
+                            sent_msg = await event.reply(caption, buttons=np_buttons)
                         except Exception:
                             pass
-                        # Autoplay: replay same song if enabled
-                        if _np_autoplay_state.get(user_id, False):
+                            
+                    if sent_msg:
+                        _song_duration = song_info_global["duration"]
+                        _song_query = query or song_info_global.get("title", "")
+                        _song_play_type = play_type
+                        _song_file = local_file_path
+                        _song_title = audio_title
+                        _song_dur_orig = audio_duration
+                        
+                        async def auto_delete_and_autoplay():
+                            await asyncio.sleep(_song_duration)
                             try:
-                                vc_bots_now = [(p, userbot_manager._running_bots[p]) for p in [
-                                    s["phone"] for s in database.get_sessions(user_id)
-                                    if userbot_manager.is_bot_running(s["phone"])
-                                ] if getattr(userbot_manager._running_bots.get(p), "current_vc_chat_id", None)]
-                                if vc_bots_now:
-                                    await asyncio.gather(
-                                        *[bot.play_song(_song_query, play_type=_song_play_type,
-                                                        local_file=_song_file, title=_song_title,
-                                                        duration=_song_dur_orig)
-                                          for _, bot in vc_bots_now],
-                                        return_exceptions=True
-                                    )
-                            except Exception as ap_err:
-                                logger.warning(f"Autoplay loop failed: {ap_err}")
-                        file_path_cleanup = song_info_global.get("file_path")
-                        if file_path_cleanup and os.path.exists(file_path_cleanup) and "silence" not in file_path_cleanup:
-                            try:
-                                os.remove(file_path_cleanup)
-                                logger.info(f"Deleted local song file: {file_path_cleanup}")
-                            except Exception as e:
-                                logger.warning(f"Could not delete local file {file_path_cleanup}: {e}")
-                    asyncio.create_task(auto_delete_and_autoplay())
-            else:
-                await event.reply("❌ Failed to play song/video on any active Voice Chat.")
-            return
+                                await client.delete_messages(event.chat_id, sent_msg.id)
+                            except Exception:
+                                pass
+                            # Autoplay: replay same song if enabled
+                            if _np_autoplay_state.get(user_id, False):
+                                try:
+                                    vc_bots_now = [(p, userbot_manager._running_bots[p]) for p in [
+                                        s["phone"] for s in database.get_sessions(user_id)
+                                        if userbot_manager.is_bot_running(s["phone"])
+                                    ] if getattr(userbot_manager._running_bots.get(p), "current_vc_chat_id", None)]
+                                    if vc_bots_now:
+                                        await asyncio.gather(
+                                            *[bot.play_song(_song_query, play_type=_song_play_type,
+                                                            local_file=_song_file, title=_song_title,
+                                                            duration=_song_dur_orig)
+                                              for _, bot in vc_bots_now],
+                                            return_exceptions=True
+                                        )
+                                except Exception as ap_err:
+                                    logger.warning(f"Autoplay loop failed: {ap_err}")
+                            file_path_cleanup = song_info_global.get("file_path")
+                            if file_path_cleanup and os.path.exists(file_path_cleanup) and "silence" not in file_path_cleanup:
+                                try:
+                                    os.remove(file_path_cleanup)
+                                    logger.info(f"Deleted local song file: {file_path_cleanup}")
+                                except Exception as e:
+                                    logger.warning(f"Could not delete local file {file_path_cleanup}: {e}")
+                        asyncio.create_task(auto_delete_and_autoplay())
+                else:
+                    detailed_error = error_details[0] if error_details else "Failed to play on any active Voice Chat."
+                    await event.reply(f"❌ **Failed to play:** {detailed_error}")
+                return
 
         if user_id not in _bot_action_states:
             return
