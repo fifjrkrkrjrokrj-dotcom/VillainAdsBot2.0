@@ -749,7 +749,15 @@ class UserBot:
                 self.current_vc_chat_id,
                 AudioPiped(silence_file)
             )
-            self.is_muted = True
+            
+            # Automatically mute the stream back when playback stops
+            try:
+                await pytg.mute_stream(self.current_vc_chat_id)
+                self.is_muted = True
+                logger.info(f"Automatically muted userbot {self.session_id} back to silence.")
+            except Exception as mute_err:
+                logger.warning(f"Could not auto-mute stream on stop: {mute_err}")
+                
             # Clear in MongoDB and memory
             sess_data = database.get_session(self.session_id)
             if sess_data:
@@ -817,6 +825,14 @@ class UserBot:
                 "thumb": thumb,
                 "file_path": file_path
             }
+            
+            # Automatically unmute the stream for music playback
+            try:
+                await pytg.unmute_stream(self.current_vc_chat_id)
+                self.is_muted = False
+                logger.info(f"Automatically unmuted userbot {self.session_id} for song playing.")
+            except Exception as unmute_err:
+                logger.warning(f"Could not auto-unmute stream on play: {unmute_err}")
             
             # Save playing status in MongoDB
             sess_data = database.get_session(self.session_id)
