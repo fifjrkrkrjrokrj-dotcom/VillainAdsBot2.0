@@ -195,10 +195,58 @@ def get_global_settings() -> Dict[str, Any]:
                 
         # Override with current environment values at runtime so Railway environment changes take priority
         import os
-        for k in ["support_channel", "support_group", "upi_id", "usdt_bep20_address", "ton_address"]:
-            env_val = os.getenv(k.upper()) or os.getenv(k)
-            if env_val:
-                settings[k] = env_val
+        
+        # String/URL overrides
+        for env_key, settings_key in [
+            ("SUPPORT_CHANNEL", "support_channel"),
+            ("SUPPORT_GROUP", "support_group"),
+            ("UPI_ID", "upi_id"),
+            ("USDT_BEP20_ADDRESS", "usdt_bep20_address"),
+            ("TON_ADDRESS", "ton_address"),
+            ("START_IMAGE", "start_image"),
+            ("PING_IMAGE", "ping_image"),
+            ("HELP_IMAGE", "help_image"),
+            ("GPT_API_KEY", "gpt_api_key"),
+            ("BRANDING_USERNAME", "branding_username"),
+            ("BRANDING_NAME_TEXT", "branding_name_text"),
+            ("BRANDING_BIO_TEXT", "branding_bio_text"),
+        ]:
+            env_val = os.getenv(env_key) or os.getenv(env_key.lower())
+            if env_val is not None:
+                settings[settings_key] = env_val.strip()
+
+        # Numeric overrides
+        for env_key, settings_key, val_type in [
+            ("PRICE_PER_ID", "price_per_id", float),
+            ("BRANDING_DURATION", "branding_duration", int),
+            ("LOG_GROUP_ID", "log_group_id", int),
+            ("REFERRAL_COMMISSION", "referral_commission", float),
+        ]:
+            env_val = os.getenv(env_key) or os.getenv(env_key.lower())
+            if env_val is not None and env_val.strip():
+                try:
+                    settings[settings_key] = val_type(env_val.strip())
+                except ValueError:
+                    pass
+
+        # Boolean overrides
+        for env_key, settings_key in [
+            ("BRANDING_NAME_ENABLED", "branding_name_enabled"),
+            ("BRANDING_BIO_ENABLED", "branding_bio_enabled"),
+            ("MAINTENANCE_MODE", "maintenance_mode"),
+        ]:
+            env_val = os.getenv(env_key) or os.getenv(env_key.lower())
+            if env_val is not None and env_val.strip():
+                settings[settings_key] = env_val.strip().lower() == "true"
+
+        # List overrides
+        for env_key, settings_key in [
+            ("FORCE_JOIN_LINKS", "force_join_links"),
+            ("USERBOT_AUTO_JOIN_LINKS", "userbot_auto_join_links"),
+        ]:
+            env_val = os.getenv(env_key) or os.getenv(env_key.lower())
+            if env_val is not None:
+                settings[settings_key] = [x.strip() for x in env_val.split(",") if x.strip()]
         
         # Ensure ORIGINAL_ADMIN_IDS are always whitelisted
         for admin_id in config.ORIGINAL_ADMIN_IDS:
