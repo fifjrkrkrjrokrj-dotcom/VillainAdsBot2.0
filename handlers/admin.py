@@ -482,7 +482,7 @@ def register_handlers(client):
                     global_settings["help_image"] = parts[2] if parts[2].lower() != "none" else None
                     success = True
                 else:
-                    raise ValueError("Must provide 3 comma-separated File IDs (or 'none').")
+                    raise ValueError("Must provide 3 comma-separated URLs or File IDs (or 'none').")
                     
             # 6.1 Set UPI ID
             elif action == "WAITING_FOR_SET_UPI":

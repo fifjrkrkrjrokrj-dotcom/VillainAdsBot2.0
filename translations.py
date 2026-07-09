@@ -135,7 +135,7 @@ TRANSLATIONS = {
         "help_set_lg": "ℹ️ Set the log channel/group ID.",
         "help_set_bu": "ℹ️ Set the bot username used in branding.",
         "help_set_bd": "ℹ️ Set duration of branding enforcement in days.",
-        "help_set_imgs": "ℹ️ Update start/ping/help images (file IDs).",
+        "help_set_imgs": "ℹ️ Update start/ping/help images (URLs/links).",
         "help_manage_admins": "ℹ️ Add or remove administrators.",
         
         "prompt_set_price": "💰 Send the new price for an extra ID (e.g. `10.0`):",
@@ -146,7 +146,7 @@ TRANSLATIONS = {
         "prompt_set_lg": "📁 Send the group/channel ID for logs (e.g. `-10012345678`):",
         "prompt_set_bu": "🏷️ Send the branding bot username (without @, or `none` to disable):",
         "prompt_set_bd": "⏱️ Send branding duration in days (e.g. `30`):",
-        "prompt_set_imgs": "🖼️ Send start/ping/help images in format: `start_id,ping_id,help_id`:",
+        "prompt_set_imgs": "🖼️ Send start/ping/help image URLs in format:\n`start_url,ping_url,help_url`\n\nExample:\n`https://files.catbox.moe/l64h7i.jpg,https://files.catbox.moe/xxpn14.jpg,https://files.catbox.moe/7qgokb.jpg`:",
         "prompt_add_admin": "👥 Send the Telegram User ID of the new admin:",
         "prompt_rem_admin": "👥 Send the Telegram User ID of the admin to remove:",
         
@@ -313,7 +313,7 @@ TRANSLATIONS = {
         "help_set_lg": "ℹ️ लॉग ग्रुप/चैनल आईडी सेट करें।",
         "help_set_bu": "ℹ️ ब्रांडिंग के लिए प्रयुक्त बॉट यूज़रनेम सेट करें।",
         "help_set_bd": "ℹ️ ब्रांडिंग की अवधि (दिनों में) सेट करें।",
-        "help_set_imgs": "ℹ️ स्टार्ट/पिंग/हेल्प के लिए फ़ाइल आईडी बदलें।",
+        "help_set_imgs": "ℹ️ स्टार्ट/पिंग/हेल्प के लिए इमेज URL/लिंक बदलें।",
         "help_manage_admins": "ℹ️ व्यवस्थापक जोड़ें या निकालें।",
         
         "prompt_set_price": "💰 प्रति आईडी नया मूल्य भेजें (जैसे `10.0`):",
@@ -324,7 +324,7 @@ TRANSLATIONS = {
         "prompt_set_lg": "📁 लॉग्स के लिए ग्रुप/चैनल आईडी भेजें (जैसे `-10012345678`):",
         "prompt_set_bu": "🏷️ ब्रांडिंग बॉट यूज़रनेम भेजें (बिना @ के, या बंद करने के लिए `none`):",
         "prompt_set_bd": "⏱️ ब्रांडिंग अवधि दिनों में भेजें (जैसे `30`):",
-        "prompt_set_imgs": "🖼️ चित्र फ़ाइल आईडी इस प्रारूप में भेजें: `start_id,ping_id,help_id`:",
+        "prompt_set_imgs": "🖼️ इमेज URL इस प्रारूप में भेजें:\n`start_url,ping_url,help_url`\n\nउदाहरण:\n`https://files.catbox.moe/l64h7i.jpg,https://files.catbox.moe/xxpn14.jpg,https://files.catbox.moe/7qgokb.jpg`:",
         "prompt_add_admin": "👥 नए एडमिन की टेलीग्राम यूज़र आईडी भेजें:",
         "prompt_rem_admin": "👥 निकाले जाने वाले एडमिन की टेलीग्राम यूज़र आईडी भेजें:",
         
@@ -482,7 +482,7 @@ TRANSLATIONS = {
         "help_set_lg": "ℹ️ Задать ID группы/канала для логов и заявок.",
         "help_set_bu": "ℹ️ Изменить юзернейм бота, используемый в брендинге.",
         "help_set_bd": "ℹ️ Задать срок брендинга в днях.",
-        "help_set_imgs": "ℹ️ Обновить File ID картинок для старта/пинга/справки.",
+        "help_set_imgs": "ℹ️ Обновить URL/ссылки картинок для старта/пинга/справки.",
         "help_manage_admins": "ℹ️ Добавить или удалить администратора.",
         
         "prompt_set_price": "💰 Отправьте новую цену за слот ID (например, `10.0`):",
@@ -493,7 +493,7 @@ TRANSLATIONS = {
         "prompt_set_lg": "📁 Отправьте ID группы/канала для логов (например, `-10012345678`):",
         "prompt_set_bu": "🏷️ Отправьте юзернейм для брендинга (без @, или `none` для отключения):",
         "prompt_set_bd": "⏱️ Отправьте длительность брендинга в днях (например, `30`):",
-        "prompt_set_imgs": "🖼️ Отправьте File ID картинок в формате `start_id,ping_id,help_id`:",
+        "prompt_set_imgs": "🖼️ Отправьте URL картинок в формате:\n`start_url,ping_url,help_url`\n\nПример:\n`https://files.catbox.moe/l64h7i.jpg,https://files.catbox.moe/xxpn14.jpg,https://files.catbox.moe/7qgokb.jpg`:",
         "prompt_add_admin": "👥 Отправьте Telegram User ID нового администратора:",
         "prompt_rem_admin": "👥 Отправьте Telegram User ID удаляемого администратора:",
         
