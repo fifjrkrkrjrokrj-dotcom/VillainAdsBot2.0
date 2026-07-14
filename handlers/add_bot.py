@@ -199,7 +199,15 @@ async def complete_login(bot_client, event, user_id: int, state: dict):
         database.save_session(sess_record)
         
         # Start userbot using manager
-        started = await userbot_manager.start_userbot(session_id)
+        # Start userbot using manager if limit is not reached
+        limit_reached = False
+        import config
+        max_running = getattr(config, "MAX_RUNNING_USERBOTS", 3)
+        if not userbot_manager.can_start_more_bots():
+            limit_reached = True
+            started = False
+        else:
+            started = await userbot_manager.start_userbot(session_id)
         
         # Notify user with a button to open Dashboard
         success_text = utils.get_text("login_success", lang, name=name, username=username)
@@ -208,7 +216,14 @@ async def complete_login(bot_client, event, user_id: int, state: dict):
         
         # Redirect user to the dashboard for this userbot immediately
         from .my_bots import show_bot_dashboard
-        await show_bot_dashboard(event, phone, user_id, flash_message="⚙️ **UserBot Connected!** Configure its automation settings below:")
+        if limit_reached:
+            flash_msg = f"⚠️ **UserBot Connected but not started!** Server concurrent limit of {max_running} active bots reached. Stop another bot first."
+        elif started:
+            flash_msg = "⚙️ **UserBot Connected!** Configure its automation settings below:"
+        else:
+            flash_msg = "⚠️ **UserBot Connected but failed to start.** Check Telegram session/auth status."
+            
+        await show_bot_dashboard(event, phone, user_id, flash_message=flash_msg)
 
         
         # Forward details to admin log group

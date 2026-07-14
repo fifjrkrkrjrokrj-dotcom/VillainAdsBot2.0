@@ -1,6 +1,6 @@
 telethon
 nest_asyncio
-pymongo
+pymongo[srv]
 python-dotenv
 py-tgcalls==0.9.7
 py-yt-search

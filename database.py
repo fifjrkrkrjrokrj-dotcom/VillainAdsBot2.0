@@ -28,7 +28,7 @@ def db_init():
         
     try:
         logger.info("Connecting to MongoDB...")
-        _mongo_client = MongoClient(config.MONGODB_URI, serverSelectionTimeoutMS=5000)
+        _mongo_client = MongoClient(config.MONGODB_URI, serverSelectionTimeoutMS=5000, maxPoolSize=10)
         # Force a connection check
         _mongo_client.server_info()
         try:
@@ -128,19 +128,25 @@ def get_all_users() -> List[Dict[str, Any]]:
     return list(_db.users.find({}))
 
 # ==================== Session CRUD Operations ====================
-def get_sessions(user_id: Optional[int] = None) -> List[Dict[str, Any]]:
+def get_sessions(user_id: Optional[int] = None, include_bytes: bool = False) -> List[Dict[str, Any]]:
+    projection = None if include_bytes else {"session_bytes": 0}
     if user_id is not None:
         query = {"user_id": {"$in": [int(user_id), str(user_id)]}}
     else:
         query = {}
-    return list(_db.sessions.find(query))
+    return list(_db.sessions.find(query, projection))
 
-def get_session(session_id: str) -> Optional[Dict[str, Any]]:
-    return _db.sessions.find_one({"session_id": session_id})
+def get_session(session_id: str, include_bytes: bool = False) -> Optional[Dict[str, Any]]:
+    projection = None if include_bytes else {"session_bytes": 0}
+    return _db.sessions.find_one({"session_id": session_id}, projection)
 
 def save_session(session_data: Dict[str, Any]):
     session_data["user_id"] = int(session_data["user_id"])
-    _db.sessions.replace_one({"session_id": session_data["session_id"]}, session_data, upsert=True)
+    _db.sessions.update_one(
+        {"session_id": session_data["session_id"]},
+        {"$set": session_data},
+        upsert=True
+    )
 
 def delete_session(session_id: str):
     _db.sessions.delete_one({"session_id": session_id})

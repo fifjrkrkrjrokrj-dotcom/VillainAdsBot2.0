@@ -973,7 +973,7 @@ class UserBot:
         if self.is_running:
             return True
             
-        sess_data = database.get_session(self.session_id)
+        sess_data = database.get_session(self.session_id, include_bytes=True)
         if not sess_data:
             logger.error(f"Session data not found in DB for {self.session_id}")
             return False
@@ -1097,6 +1097,8 @@ class UserBot:
 
             database.save_session(sess_data)
             logger.info(f"Userbot {self.session_id} started successfully.")
+            import gc
+            gc.collect()
             return True
         except Exception as e:
             logger.error(f"Failed to start userbot {self.session_id}: {e}")
@@ -1157,6 +1159,9 @@ class UserBot:
                 except Exception as read_err:
                     logger.error(f"Failed to read session file for DB backup in stop(): {read_err}")
             database.save_session(sess_data)
+            
+        import gc
+        gc.collect()
                 
         logger.info(f"Userbot {self.session_id} stopped.")
 

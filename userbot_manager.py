@@ -4,12 +4,21 @@ import logging
 import asyncio
 from typing import Dict, Optional
 import database
+import config
 from userbot import UserBot
 
 logger = logging.getLogger(__name__)
 
 # Dictionary containing active running UserBot instances
 _running_bots: Dict[str, UserBot] = {}
+
+def can_start_more_bots() -> bool:
+    """
+    Returns True if starting another userbot would not exceed the concurrent limit.
+    """
+    max_running = getattr(config, "MAX_RUNNING_USERBOTS", 3)
+    active_count = len([b for b in _running_bots.values() if b.is_running])
+    return active_count < max_running
 
 async def start_userbot(session_id: str) -> bool:
     """
@@ -19,6 +28,11 @@ async def start_userbot(session_id: str) -> bool:
         # Already running, verify its status
         if _running_bots[session_id].is_running:
             return True
+            
+    # Check concurrent limit to prevent OOM
+    if not can_start_more_bots():
+        logger.warning(f"Limit of active userbots reached ({config.MAX_RUNNING_USERBOTS}). Cannot start userbot {session_id}.")
+        return False
             
     bot = UserBot(session_id)
     success = await bot.start()
@@ -54,6 +68,13 @@ async def start_all_running_bots():
         if s.get("status") == "running":
             session_id = s["session_id"]
             try:
+                # Check limit before trying to start
+                if not can_start_more_bots():
+                    logger.warning(f"Resuming aborted for userbot {session_id} because the limit of {config.MAX_RUNNING_USERBOTS} active bots was reached.")
+                    s["status"] = "stopped"
+                    database.save_session(s)
+                    continue
+
                 # Start userbots sequentially with a small delay to avoid network/loop congestion
                 success = await start_userbot(session_id)
                 if success:

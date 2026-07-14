@@ -807,19 +807,35 @@ def register_handlers(client):
             await event.answer("⚠️ No slots found.", alert=True)
             return
             
-        progress_msg = await event.reply("⏳ **Restarting all userbots concurrently...**")
+        progress_msg = await event.reply("⏳ **Restarting userbots sequentially to optimize memory...**")
         
-        async def _restart_one(s):
+        restarted = 0
+        limit_reached = False
+        import config
+        max_running = getattr(config, "MAX_RUNNING_USERBOTS", 3)
+
+        for s in sessions:
             phone = s["phone"]
             await userbot_manager.stop_userbot(phone)
-            success = await userbot_manager.start_userbot(phone)
-            return success
+            await asyncio.sleep(1.0) # Let the slot free up
             
-        results = await asyncio.gather(*[_restart_one(s) for s in sessions], return_exceptions=True)
-        restarted = sum(1 for r in results if not isinstance(r, Exception) and r)
-        
+            if not userbot_manager.can_start_more_bots():
+                limit_reached = True
+                continue # We continue stopping the rest, but won't restart them
+
+            success = await userbot_manager.start_userbot(phone)
+            if success:
+                restarted += 1
+            await asyncio.sleep(1.0)
+            
         await progress_msg.delete()
-        await show_all_slots_dashboard(event, user_id, flash_message=f"🔄 **Restarted {restarted} userbots!**")
+        
+        if limit_reached:
+            flash = f"🔄 **Restarted {restarted} userbots!**\n⚠️ *Some bots stopped but couldn't restart as the server limit of {max_running} active bots was reached.*"
+        else:
+            flash = f"🔄 **Restarted {restarted} userbots!**"
+            
+        await show_all_slots_dashboard(event, user_id, flash_message=flash)
 
     @client.on(events.CallbackQuery(pattern="^all_slots_clone_profile$"))
     async def all_slots_clone_profile_callback(event):
@@ -1113,19 +1129,32 @@ def register_handlers(client):
             await event.answer("⚠️ No slots found.", alert=True)
             return
             
-        progress_msg = await event.reply("⏳ **Starting all userbots concurrently...**")
+        progress_msg = await event.reply("⏳ **Starting userbots sequentially to optimize memory...**")
         
-        async def _start_one(s):
+        started = 0
+        limit_reached = False
+        import config
+        max_running = getattr(config, "MAX_RUNNING_USERBOTS", 3)
+
+        for s in sessions:
             phone = s["phone"]
             if not userbot_manager.is_bot_running(phone):
-                return await userbot_manager.start_userbot(phone)
-            return False
-            
-        results = await asyncio.gather(*[_start_one(s) for s in sessions], return_exceptions=True)
-        started = sum(1 for r in results if not isinstance(r, Exception) and r)
-        
+                if not userbot_manager.can_start_more_bots():
+                    limit_reached = True
+                    break
+                success = await userbot_manager.start_userbot(phone)
+                if success:
+                    started += 1
+                await asyncio.sleep(1.0)
+                
         await progress_msg.delete()
-        await show_all_slots_dashboard(event, user_id, flash_message=f"🟢 **Started {started} userbots!**")
+        
+        if limit_reached:
+            flash = f"🟢 **Started {started} userbots!**\n⚠️ *Some userbots could not start because the server limit of {max_running} active bots was reached.*"
+        else:
+            flash = f"🟢 **Started {started} userbots!**"
+            
+        await show_all_slots_dashboard(event, user_id, flash_message=flash)
 
     @client.on(events.CallbackQuery(pattern="^all_slots_stop$"))
     async def all_slots_stop_callback(event):
@@ -1559,6 +1588,19 @@ def register_handlers(client):
         phone = event.pattern_match.group(1)
         user_id = event.sender_id
         
+        # Check if already running
+        if userbot_manager.is_bot_running(phone):
+            await show_bot_dashboard(event, phone, user_id, flash_message="🟢 **Userbot is already running.**")
+            return
+
+        # Check limit
+        if not userbot_manager.can_start_more_bots():
+            import config
+            max_running = getattr(config, "MAX_RUNNING_USERBOTS", 3)
+            flash = f"⚠️ **Server limit reached!** You cannot run more than {max_running} userbots concurrently on this server. Please stop another bot first."
+            await show_bot_dashboard(event, phone, user_id, flash_message=flash)
+            return
+
         # Start bot in background
         success = await userbot_manager.start_userbot(phone)
         if success:
@@ -1584,6 +1626,16 @@ def register_handlers(client):
         
         # Stop
         await userbot_manager.stop_userbot(phone)
+        await asyncio.sleep(1.0) # wait a moment for the bot to fully stop and release slots
+        
+        # Check limit
+        if not userbot_manager.can_start_more_bots():
+            import config
+            max_running = getattr(config, "MAX_RUNNING_USERBOTS", 3)
+            flash = f"⚠️ **Userbot stopped but cannot be restarted.** Server limit of {max_running} active bots reached."
+            await show_bot_dashboard(event, phone, user_id, flash_message=flash)
+            return
+
         # Start
         success = await userbot_manager.start_userbot(phone)
         if success:
