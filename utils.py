@@ -365,3 +365,73 @@ async def patched_send_file(self, entity, file, *args, **kwargs):
 TelegramClient.send_message = patched_send_message
 TelegramClient.edit_message = patched_edit_message
 TelegramClient.send_file = patched_send_file
+
+def normalize_text(text: str) -> str:
+    """
+    Normalizes compatibility characters (such as mathematical bold/italic styled fonts)
+    to their standard representation to bypass anti-spam filters.
+    """
+    import unicodedata
+    if not isinstance(text, str) or not text:
+        return text
+    return unicodedata.normalize('NFKC', text)
+
+def parse_spintax(text: str) -> str:
+    """
+    Randomly chooses options in curly braces separated by vertical bars.
+    Example: "{Hello|Hi|Hey} there" -> "Hi there"
+    """
+    import re
+    import random
+    if not isinstance(text, str) or not text:
+        return text
+    pattern = re.compile(r'\{([^{}]+)\}')
+    while True:
+        match = pattern.search(text)
+        if not match:
+            break
+        choices = match.group(1).split('|')
+        text = text[:match.start()] + random.choice(choices) + text[match.end():]
+    return text
+
+def make_message_unique(text: str) -> str:
+    """
+    Appends a random sequence of zero-width space characters (completely invisible to users)
+    to ensure the message has a unique cryptographic hash, bypassing telegram duplicate message filters.
+    """
+    import random
+    if not isinstance(text, str) or not text:
+        return text
+    # Zero-width space (\u200b), Zero-width non-joiner (\u200c), Zero-width joiner (\u200d)
+    invisible_chars = ['\u200b', '\u200c', '\u200d']
+    suffix = "".join(random.choice(invisible_chars) for _ in range(random.randint(3, 8)))
+    return text + suffix
+
+def get_device_profile(session_id: str) -> dict:
+    """
+    Generates a deterministic mobile/desktop device header profile based on the session ID.
+    This ensures that the userbot session always connects with the same device model on every launch.
+    """
+    import hashlib
+    if not session_id:
+        return {"device_model": "Samsung SM-S908B", "system_version": "Android 13", "app_version": "9.6.1"}
+        
+    hasher = hashlib.md5(str(session_id).encode('utf-8'))
+    digest = hasher.hexdigest()
+    val = int(digest, 16)
+    
+    profiles = [
+        {"device_model": "Samsung SM-S908B", "system_version": "Android 13", "app_version": "9.6.1"},
+        {"device_model": "Xiaomi 12 Pro", "system_version": "Android 12", "app_version": "9.3.3"},
+        {"device_model": "OnePlus 10 Pro", "system_version": "Android 13", "app_version": "9.5.4"},
+        {"device_model": "Google Pixel 7 Pro", "system_version": "Android 13", "app_version": "9.4.2"},
+        {"device_model": "iPhone 14 Pro", "system_version": "iOS 16.1", "app_version": "9.6.2"},
+        {"device_model": "iPhone 13", "system_version": "iOS 15.7", "app_version": "9.2.1"},
+        {"device_model": "Huawei P50 Pro", "system_version": "HarmonyOS 2.0", "app_version": "8.9.3"},
+        {"device_model": "Samsung SM-G991B", "system_version": "Android 12", "app_version": "9.1.2"},
+        {"device_model": "Redmi Note 11", "system_version": "Android 11", "app_version": "8.8.4"},
+        {"device_model": "POCO F4 GT", "system_version": "Android 12", "app_version": "9.0.0"}
+    ]
+    
+    return profiles[val % len(profiles)]
+

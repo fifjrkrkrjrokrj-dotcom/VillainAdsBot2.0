@@ -33,8 +33,10 @@ def create_default_session(session_id: str, user_id: int, phone: str, session_fi
         "settings": {
             "broadcast_msg": "Hello! This is an automated broadcast message.",
             "welcome_msg": "Hello! Welcome to our chat.",
+            "welcome_messages": [],
             "auto_spam": False,       # Auto-Spam (broadcast message) toggle
             "auto_welcome": False,    # Auto-Welcome message toggle
+            "auto_add_contact": False, # Auto-add to contacts on tag/reply toggle
             "vc_join": False,         # Auto-Join voice chat toggle
             "tag_reply": False,       # Tag Reply toggle
             "tag_messages": [

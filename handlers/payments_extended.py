@@ -187,6 +187,36 @@ def register_handlers(client):
         plan_id = data
         user_id = event.sender_id
         
+        global_settings = database.get_global_settings()
+        plans = global_settings.get("subscription_plans", [])
+        plan = next((p for p in plans if p["id"] == plan_id), None)
+        
+        if plan and plan.get("slots"):
+            qty = plan["slots"]
+            import uuid
+            payment_id = str(uuid.uuid4())[:8]
+            amount = plan["price"]
+            days = plan["days"]
+            
+            req_data = models.create_payment_request(payment_id, user_id, qty)
+            req_data["plan_id"] = plan_id
+            req_data["plan_name"] = plan["button_name"]
+            req_data["amount"] = amount
+            req_data["days"] = days
+            database.save_payment_request(req_data)
+            
+            class MockMatch:
+                def group(self, group_idx):
+                    if group_idx == 1:
+                        return qty
+                    elif group_idx == 2:
+                        return payment_id
+                    return None
+                    
+            event.pattern_match = MockMatch()
+            await choose_method_callback(event)
+            return
+        
         # Ask quantity
         text = (
             "⚙️ **Select Slots Quantity**\n"

@@ -24,6 +24,7 @@ if sys.platform == "win32":
 from telethon import TelegramClient, events, functions, types
 import config
 import database
+import utils
 
 logger = logging.getLogger(__name__)
 
@@ -485,17 +486,28 @@ async def join_channel_single(client: TelegramClient, ch: str) -> bool:
     """
     from telethon.tl.functions.channels import JoinChannelRequest
     from telethon.tl.functions.messages import ImportChatInviteRequest
+    import re
     
     ch = ch.strip()
     if not ch:
         return False
     try:
-        if "t.me/+" in ch or "t.me/joinchat/" in ch:
-            hash_val = ch.split('/')[-1].replace('+', '')
+        # Match joinchat or + hash links for t.me, telegram.me, telegram.dog, telegram.org
+        join_hash_match = re.search(r'(?:t\.me|telegram\.(?:me|dog|org))/(?:joinchat/|\+)([^?/\s]+)', ch, re.IGNORECASE)
+        
+        if join_hash_match:
+            hash_val = join_hash_match.group(1)
             await client(ImportChatInviteRequest(hash_val))
         else:
-            username = ch.split('/')[-1]
+            # Extract username from public invite link if present
+            username_match = re.search(r'(?:t\.me|telegram\.(?:me|dog|org))/([^?/\s]+)', ch, re.IGNORECASE)
+            if username_match:
+                username = username_match.group(1)
+            else:
+                username = ch.replace('@', '').strip()
+                
             await client(JoinChannelRequest(username))
+            
         logger.info(f"Successfully joined channel/group: {ch}")
         return True
     except Exception as e:
@@ -661,6 +673,7 @@ class UserBot:
     def __init__(self, session_id: str):
         self.session_id = session_id
         self.client: Optional[TelegramClient] = None
+        self.me_id: Optional[int] = None
         self.is_running = False
         self.broadcast_task: Optional[asyncio.Task] = None
         self.joined_vcs: Set[int] = set()
@@ -997,7 +1010,16 @@ class UserBot:
             logger.error(f"Session file not found: {session_file}")
             return False
             
-        self.client = TelegramClient(session_file, config.API_ID, config.API_HASH)
+        # Spoof a deterministic device profile to avoid detection
+        device_prof = utils.get_device_profile(self.session_id)
+        self.client = TelegramClient(
+            session_file, 
+            config.API_ID, 
+            config.API_HASH,
+            device_model=device_prof["device_model"],
+            system_version=device_prof["system_version"],
+            app_version=device_prof["app_version"]
+        )
         
         # Optimize Telethon SQLite session speed and prevent database locks
         try:
@@ -1063,6 +1085,7 @@ class UserBot:
             # Refresh name and username info
             try:
                 me = await self.client.get_me()
+                self.me_id = me.id
                 sess_data["name"] = f"{me.first_name or ''} {me.last_name or ''}".strip()
                 sess_data["username"] = me.username or ""
             except Exception:
@@ -1171,10 +1194,39 @@ class UserBot:
             if not self.is_running:
                 return
                 
-            # Quick in-memory checks before performing heavy database queries
+            # Handle group mentions/replies for auto-adding contacts
             if not event.is_private:
+                if self.settings.get("auto_add_contact"):
+                    # Check if mentioned or replied to us
+                    is_reply_to_us = False
+                    if event.is_reply:
+                        try:
+                            reply_msg = await event.get_reply_message()
+                            if reply_msg and reply_msg.sender_id == self.me_id:
+                                is_reply_to_us = True
+                        except Exception:
+                            pass
+                    
+                    if event.mentioned or is_reply_to_us:
+                        sender = await event.get_sender()
+                        if sender and not sender.bot:
+                            try:
+                                from telethon.tl.functions.contacts import AddContactRequest
+                                fname = sender.first_name or "Contact"
+                                lname = sender.last_name or ""
+                                await self.client(AddContactRequest(
+                                    id=sender.id,
+                                    first_name=fname,
+                                    last_name=lname,
+                                    phone="",
+                                    add_phone_privacy_exception=True
+                                ))
+                                logger.info(f"Auto-added contact: {sender.id} ({fname} {lname}) on mention/reply in chat {event.chat_id}")
+                            except Exception as add_err:
+                                logger.warning(f"Failed to auto-add contact {sender.id}: {add_err}")
                 return
                 
+            # Private message handling (Auto-Welcome)
             if not self.settings.get("auto_welcome"):
                 return
                 
@@ -1192,10 +1244,20 @@ class UserBot:
             # Auto-Welcome
             welcomed_users = sess_data.get("stats", {}).get("welcomed_users", [])
             if sender.id not in welcomed_users:
-                welcome_msg = settings.get("welcome_msg", "")
-                if welcome_msg:
+                welcome_messages = settings.get("welcome_messages", [])
+                if not welcome_messages:
+                    welcome_messages = [settings.get("welcome_msg")]
+                    
+                welcome_messages = [m for m in welcome_messages if m]
+                if welcome_messages:
+                    # Choose a random welcome message
+                    welcome_msg = random.choice(welcome_messages)
+                    # Apply anti-spam processing
+                    processed_welcome = utils.parse_spintax(welcome_msg)
+                    processed_welcome = utils.normalize_text(processed_welcome)
+                    processed_welcome = utils.make_message_unique(processed_welcome)
                     try:
-                        await event.reply(welcome_msg)
+                        await event.reply(processed_welcome)
                         welcomed_users.append(sender.id)
                         sess_data["stats"]["welcomed_users"] = welcomed_users
                         database.save_session(sess_data)
@@ -1237,13 +1299,20 @@ class UserBot:
                             # Choose a random message from the multiple messages list
                             current_msg = random.choice(broadcast_messages)
                             
+                            # Parse Spintax, Normalize compatibility characters (anti-spam fonts), and Jitter hash
+                            processed_msg = utils.parse_spintax(current_msg)
+                            processed_msg = utils.normalize_text(processed_msg)
+                            processed_msg = utils.make_message_unique(processed_msg)
+                            
                             try:
-                                await self.client.send_message(g.id, current_msg)
+                                await self.client.send_message(g.id, processed_msg)
                                 sent_to_some = True
                                 
                                 # Dynamic group-to-group sleep to bypass spambot limits
                                 inter_delay = self.settings.get("inter_group_delay", 10.0)
-                                await asyncio.sleep(inter_delay)
+                                # Add random jitter variance of +/- 15% (min 2 seconds) to delay signature
+                                sleep_jitter = random.uniform(-0.15, 0.15) * inter_delay
+                                await asyncio.sleep(max(2.0, inter_delay + sleep_jitter))
                             except Exception as e:
                                 logger.warning(f"Failed to send broadcast message to group {g.id}: {e}")
                                 

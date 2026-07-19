@@ -21,7 +21,7 @@ def get_action_key(data: str) -> str:
         "toggle_spam_", "toggle_welcome_", "toggle_vc_", "toggle_tag_",
         "set_tag_msg_", "change_name_", "set_interval_", "toggle_gpt_",
         "refresh_stats_", "delete_bot_", "buy_qty_", "approve_payment_",
-        "reject_payment_", "admin_"
+        "reject_payment_", "admin_", "toggle_add_contact_", "set_multi_welcome_"
     ]
     
     for p in prefixes:

@@ -69,8 +69,11 @@ async def show_purchase_menu(event, user_id: int):
         name = plan["button_name"]
         price = plan["price"]
         days = plan["days"]
-        # Button text e.g., "Monthly VIP (₹500 / 30 days)"
-        btn_label = f"✨ {name} (₹{price:.0f} / {days} days)"
+        slots = plan.get("slots")
+        if slots:
+            btn_label = f"✨ {name} ({slots} Slots - ₹{price:.0f} / {days} days)"
+        else:
+            btn_label = f"✨ {name} (₹{price:.0f} / {days} days)"
         buttons.append([
             utils.styled_button(btn_label, f"buy_plan_{plan_id}", style="primary")
         ])

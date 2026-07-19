@@ -352,6 +352,17 @@ def register_handlers(client):
                 if days <= 0:
                     raise ValueError("Days must be positive")
                 _admin_plan_temp.setdefault(user_id, {})["days"] = days
+                _admin_action_states[user_id] = "WAITING_FOR_PLAN_SLOTS"
+                buttons = [[utils.styled_button("🔙 Cancel", "cancel_admin_plan", style="danger")]]
+                await event.reply(utils.get_text("prompt_plan_slots", lang), buttons=buttons)
+                return
+                
+            # 0.1.b Plan Slots
+            elif action == "WAITING_FOR_PLAN_SLOTS":
+                slots = int(val_str)
+                if slots <= 0:
+                    raise ValueError("Slots must be positive")
+                _admin_plan_temp.setdefault(user_id, {})["slots"] = slots
                 _admin_action_states[user_id] = "WAITING_FOR_PLAN_PRICE"
                 buttons = [[utils.styled_button("🔙 Cancel", "cancel_admin_plan", style="danger")]]
                 await event.reply(utils.get_text("prompt_plan_price", lang), buttons=buttons)
@@ -367,7 +378,6 @@ def register_handlers(client):
                 buttons = [[utils.styled_button("🔙 Cancel", "cancel_admin_plan", style="danger")]]
                 await event.reply(utils.get_text("prompt_plan_name", lang), buttons=buttons)
                 return
-
                 
             # 0.3 Plan Name
             elif action == "WAITING_FOR_PLAN_NAME":
@@ -376,7 +386,7 @@ def register_handlers(client):
                     raise ValueError("Name cannot be empty")
                 
                 temp_data = _admin_plan_temp.pop(user_id, None)
-                if not temp_data or "days" not in temp_data or "price" not in temp_data:
+                if not temp_data or "days" not in temp_data or "slots" not in temp_data or "price" not in temp_data:
                     await event.reply("❌ State lost. Please start over.")
                     # Show manage plans sub-menu
                     class MockEvent:
@@ -390,6 +400,7 @@ def register_handlers(client):
                     return
                     
                 days = temp_data["days"]
+                slots = temp_data["slots"]
                 price = temp_data["price"]
                 
                 import uuid
@@ -399,6 +410,7 @@ def register_handlers(client):
                 plans.append({
                     "id": plan_id,
                     "days": days,
+                    "slots": slots,
                     "price": price,
                     "button_name": name
                 })
@@ -410,7 +422,8 @@ def register_handlers(client):
                     f"Plan ID: `{plan_id}`\n"
                     f"Name: **{name}**\n"
                     f"Days: **{days}**\n"
-                    f"Price per account: **₹{price:.2f}**"
+                    f"Slots count: **{slots}**\n"
+                    f"Total Price: **₹{price:.2f}**"
                 )
                 
                 # Show manage plans sub-menu
@@ -508,7 +521,7 @@ def register_handlers(client):
                 success = True
                 
             # 6.2.3 Join All Sessions collective task
-            elif action == "WAITING_FOR_JOIN_ALL_LINK":
+            elif action == "WAITING_FOR_JOIN_ALL_SESSIONS":
                 link = val_str
                 await event.reply("⏳ **Processing collective join...** Please wait.")
                 
