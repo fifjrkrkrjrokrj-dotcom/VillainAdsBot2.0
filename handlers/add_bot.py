@@ -203,11 +203,9 @@ async def complete_login(bot_client, event, user_id: int, state: dict):
         limit_reached = False
         import config
         max_running = getattr(config, "MAX_RUNNING_USERBOTS", 3)
-        if not userbot_manager.can_start_more_bots():
-            limit_reached = True
-            started = False
-        else:
-            started = await userbot_manager.start_userbot(session_id)
+        # Limit check removed
+        limit_reached = False
+        started = await userbot_manager.start_userbot(session_id)
         
         # Notify user with a button to open Dashboard
         success_text = utils.get_text("login_success", lang, name=name, username=username)
