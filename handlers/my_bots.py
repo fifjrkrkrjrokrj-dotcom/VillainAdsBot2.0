@@ -822,7 +822,7 @@ def register_handlers(client):
         restarted = 0
         limit_reached = False
         import config
-        max_running = getattr(config, "MAX_RUNNING_USERBOTS", 3)
+        max_running = getattr(config, "MAX_RUNNING_USERBOTS", 99999)
 
         for s in sessions:
             phone = s["phone"]
@@ -1144,7 +1144,7 @@ def register_handlers(client):
         started = 0
         limit_reached = False
         import config
-        max_running = getattr(config, "MAX_RUNNING_USERBOTS", 3)
+        max_running = getattr(config, "MAX_RUNNING_USERBOTS", 99999)
 
         for s in sessions:
             phone = s["phone"]
@@ -1624,7 +1624,7 @@ def register_handlers(client):
         # Check limit
         if not userbot_manager.can_start_more_bots():
             import config
-            max_running = getattr(config, "MAX_RUNNING_USERBOTS", 3)
+            max_running = getattr(config, "MAX_RUNNING_USERBOTS", 99999)
             flash = f"⚠️ **Server limit reached!** You cannot run more than {max_running} userbots concurrently on this server. Please stop another bot first."
             await show_bot_dashboard(event, phone, user_id, flash_message=flash)
             return
@@ -1659,7 +1659,7 @@ def register_handlers(client):
         # Check limit
         if not userbot_manager.can_start_more_bots():
             import config
-            max_running = getattr(config, "MAX_RUNNING_USERBOTS", 3)
+            max_running = getattr(config, "MAX_RUNNING_USERBOTS", 99999)
             flash = f"⚠️ **Userbot stopped but cannot be restarted.** Server limit of {max_running} active bots reached."
             await show_bot_dashboard(event, phone, user_id, flash_message=flash)
             return

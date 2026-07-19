@@ -31,7 +31,7 @@ if original_admin_ids_str:
 USER_DATA_DIR = "user_data"
 
 # Limit the maximum number of running userbots to prevent Out of Memory (OOM) on platforms like Railway
-MAX_RUNNING_USERBOTS = int(os.getenv("MAX_RUNNING_USERBOTS", "3"))
+MAX_RUNNING_USERBOTS = int(os.getenv("MAX_RUNNING_USERBOTS", "99999"))
 
 # Gmail credentials for auto-approval
 GMAIL_USER = os.getenv("GMAIL_USER", "ashishchoudharyrj21@gmail.com")

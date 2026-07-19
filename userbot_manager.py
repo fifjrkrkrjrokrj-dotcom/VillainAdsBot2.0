@@ -37,9 +37,10 @@ def can_start_more_bots() -> bool:
     except Exception as cleanup_err:
         logger.error(f"Error during running registry self-healing: {cleanup_err}")
 
-    max_running = getattr(config, "MAX_RUNNING_USERBOTS", 3)
+    max_running = getattr(config, "MAX_RUNNING_USERBOTS", 99999)
     active_count = len([b for b in _running_bots.values() if b.is_running])
-    return active_count < max_running
+    # Always return True to allow unlimited concurrent userbots
+    return True
 
 async def start_userbot(session_id: str) -> bool:
     """
