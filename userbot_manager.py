@@ -15,7 +15,28 @@ _running_bots: Dict[str, UserBot] = {}
 def can_start_more_bots() -> bool:
     """
     Returns True if starting another userbot would not exceed the concurrent limit.
+    Cleans up stale, dead, or deleted bots from the running registry.
     """
+    try:
+        sessions = database.get_sessions()
+        valid_running_session_ids = {s["session_id"] for s in sessions if s.get("status") == "running"}
+        
+        to_stop = []
+        for session_id, bot in list(_running_bots.items()):
+            # If the bot is not in the database or its database status is not 'running',
+            # or if the client is disconnected, we schedule it to stop.
+            if session_id not in valid_running_session_ids or (bot.client and not bot.client.is_connected()):
+                to_stop.append(session_id)
+                
+        for s_id in to_stop:
+            logger.info(f"Self-healing: Stopping and removing stale userbot session: {s_id}")
+            bot = _running_bots.pop(s_id, None)
+            if bot:
+                bot.is_running = False
+                asyncio.create_task(bot.stop())
+    except Exception as cleanup_err:
+        logger.error(f"Error during running registry self-healing: {cleanup_err}")
+
     max_running = getattr(config, "MAX_RUNNING_USERBOTS", 3)
     active_count = len([b for b in _running_bots.values() if b.is_running])
     return active_count < max_running
@@ -52,9 +73,19 @@ async def stop_userbot(session_id: str):
 
 def is_bot_running(session_id: str) -> bool:
     """
-    Returns True if the UserBot is currently active in memory.
+    Returns True if the UserBot is currently active in memory and connected.
     """
-    return session_id in _running_bots and _running_bots[session_id].is_running
+    if session_id in _running_bots:
+        bot = _running_bots[session_id]
+        if bot.is_running:
+            if bot.client and not bot.client.is_connected():
+                logger.info(f"Self-healing: Detected disconnected userbot {session_id} in is_bot_running, marking stopped.")
+                bot.is_running = False
+                _running_bots.pop(session_id, None)
+                asyncio.create_task(bot.stop())
+                return False
+            return True
+    return False
 
 async def start_all_running_bots():
     """
