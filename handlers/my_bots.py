@@ -2792,7 +2792,7 @@ def register_handlers(client):
  
         elif action == "WAITING_FOR_ALL_CUSTOM_DELAY":
             val_str = event.text.strip()
-            if val_str.isdigit() and 10 <= int(val_str) <= 300:
+            if val_str.isdigit() and 2 <= int(val_str) <= 300:
                 val = int(val_str)
                 sessions = database.get_sessions(user_id)
                 for s in sessions:
@@ -3098,7 +3098,7 @@ def register_handlers(client):
         # 5.5 Custom Delay
         elif action == "WAITING_FOR_CUSTOM_DELAY":
             val_str = event.text.strip()
-            if val_str.isdigit() and 10 <= int(val_str) <= 300:
+            if val_str.isdigit() and 2 <= int(val_str) <= 300:
                 val = int(val_str)
                 sess.setdefault("settings", {})["inter_group_delay"] = val
                 database.save_session(sess)

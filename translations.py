@@ -111,9 +111,9 @@ TRANSLATIONS = {
         # Inter-group delay
         "btn_set_inter_delay": "⏱️ Set Inter-Group Delay",
         "inter_delay_title": "⏱️ **Set Inter-Group Delay**\n\nSelect the delay between sending messages to different groups:\n⚠️ Recommended safe delay (25-60s) prevents Telegram Spambot account limits!",
-        "prompt_custom_inter_delay": "⏱️ Enter custom inter-group delay in seconds (minimum 10s, maximum 300s):",
+        "prompt_custom_inter_delay": "⏱️ Enter custom inter-group delay in seconds (minimum 2s, maximum 300s):",
         "inter_delay_updated": "✅ Inter-Group Delay updated to **{val}s**!",
-        "inter_delay_invalid": "❌ Invalid delay. Please input a number between 10 and 300.",
+        "inter_delay_invalid": "❌ Invalid delay. Please input a number between 2 and 300.",
         
         # Auto-Reply
         "btn_toggle_auto_reply": "💬 Tag Auto-Reply: {state}",
@@ -305,9 +305,9 @@ TRANSLATIONS = {
         # Inter-group delay
         "btn_set_inter_delay": "⏱️ ग्रुप्स के बीच विलंब सेट करें",
         "inter_delay_title": "⏱️ **ग्रुप्स के बीच विलंब सेट करें**\n\nएक ग्रुप से दूसरे ग्रुप में मैसेज भेजने के बीच का विलंब चुनें:\n⚠️ सुरक्षित विलंब (जैसे 25-60s) स्पैमबॉट लिमिट के खतरे को रोकता है!",
-        "prompt_custom_inter_delay": "⏱️ सेकंड में कस्टम विलंब दर्ज करें (न्यूनतम 10s, अधिकतम 300s):",
+        "prompt_custom_inter_delay": "⏱️ सेकंड में कस्टम विलंब दर्ज करें (न्यूनतम 2s, अधिकतम 300s):",
         "inter_delay_updated": "✅ ग्रुप्स के बीच का विलंब **{val}s** पर अपडेट किया गया!",
-        "inter_delay_invalid": "❌ अमान्य विलंब। कृपया 10 से 300 के बीच की संख्या दर्ज करें।",
+        "inter_delay_invalid": "❌ अमान्य विलंब। कृपया 2 से 300 के बीच की संख्या दर्ज करें।",
         
         # Auto-Reply
         "btn_toggle_auto_reply": "💬 टैग ऑटो-रिप्लाई: {state}",

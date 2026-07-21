@@ -1358,19 +1358,14 @@ class UserBot:
                                 sent_to_some = True
                                 msg_count_in_round += 1
                                 
-                                # Dynamic inter-group delay (default 30s, minimum safe floor 15s)
-                                inter_delay = float(self.settings.get("inter_group_delay", 30.0))
-                                inter_delay = max(15.0, inter_delay)
+                                # Fast dynamic inter-group delay (user configurable, default 10s, min floor 1s)
+                                inter_delay = float(self.settings.get("inter_group_delay", 10.0))
+                                inter_delay = max(1.0, inter_delay)
                                 
-                                # Add random jitter variance (+/- 20%) to humanize sending signature
-                                sleep_jitter = random.uniform(-0.20, 0.20) * inter_delay
-                                delay_to_sleep = max(10.0, inter_delay + sleep_jitter)
+                                # Add minor jitter variance (+/- 10%)
+                                sleep_jitter = random.uniform(-0.10, 0.10) * inter_delay
+                                delay_to_sleep = max(1.0, inter_delay + sleep_jitter)
                                 await asyncio.sleep(delay_to_sleep)
-                                
-                                # Batch resting: Take a 60-second rest every 15 groups to prevent pattern detection
-                                if msg_count_in_round % 15 == 0:
-                                    logger.info(f"Userbot {self.session_id} taking a 60s batch rest after sending to {msg_count_in_round} groups...")
-                                    await asyncio.sleep(60.0)
 
                             except PeerFloodError:
                                 logger.warning(f"⚠️ PeerFloodError on userbot {self.session_id}! Telegram rate-limit detected. Auto-spam PAUSED to protect account.")
