@@ -497,6 +497,10 @@ async def show_all_slots_dashboard(event, user_id: int, flash_message: Optional[
     except Exception:
         await event.respond(text, buttons=buttons)
 
+
+def register_handlers(client):
+    
+    # ------------------ New Features / Handlers ------------------
     @client.on(events.CallbackQuery(pattern="^all_slots_toggle_reply$"))
     async def all_slots_toggle_reply_callback(event):
         user_id = event.sender_id
@@ -528,10 +532,6 @@ async def show_all_slots_dashboard(event, user_id: int, flash_message: Optional[
         except Exception:
             await event.respond(prompt_text, buttons=buttons)
 
-
-def register_handlers(client):
-    
-    # ------------------ New Features / Handlers ------------------
     @client.on(events.CallbackQuery(pattern="^menu_all_slots$"))
     async def menu_all_slots_callback(event):
         await show_all_slots_dashboard(event, event.sender_id)
