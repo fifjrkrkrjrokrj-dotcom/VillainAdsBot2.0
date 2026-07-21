@@ -273,10 +273,9 @@ async def show_bot_dashboard(event, phone: str, user_id: int, flash_message: Opt
             ("btn_set_broadcast", f"set_broadcast_{phone}")
         ])
 
-        # Row 1.2: Set Welcome & Multi-Welcome
+        # Row 1.2: Set DM Welcome Message (Full width)
         rows.append([
-            ("btn_set_welcome", f"set_welcome_{phone}"),
-            ("btn_set_multi_welcome", f"set_multi_welcome_{phone}")
+            ("btn_set_welcome", f"set_welcome_{phone}")
         ])
         
         # Row 1.5: Set Tag Auto-Reply Messages (Full width)
@@ -1473,14 +1472,13 @@ def register_handlers(client):
 
     @client.on(events.CallbackQuery(pattern="^all_slots_vc_join_grp$"))
     async def all_slots_vc_join_grp_callback(event):
-        """Join Group via invite link AND its VC in one step (all bots)."""
+        """Join Group via invite link for ALL userbots (running or stopped)."""
         user_id = event.sender_id
         user = database.get_user(user_id)
         
         sessions = database.get_sessions(user_id)
-        running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
-        if not running_phones:
-            await event.answer("⚠️ Please start at least one userbot first!", alert=True)
+        if not sessions:
+            await event.answer("⚠️ No userbot slots found. Please login a bot first!", alert=True)
             return
             
         _bot_action_states[user_id] = {
@@ -1488,11 +1486,11 @@ def register_handlers(client):
         }
         
         prompt_text = (
-            "🔗 **Join Group + VC — All Slots (Auto)**\n"
+            "🔗 **Join Group — All Slots (Auto)**\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
-            f"> **{len(running_phones)} userbots** will all:\n"
-            "1. **Auto-join** the group/channel via your link.\n"
-            "2. **Immediately join** the active Voice Chat in that group.\n\n"
+            f"> **All {len(sessions)} userbots** (running or stopped) will:\n"
+            "1. **Auto-start** (if currently stopped).\n"
+            "2. **Auto-join** the group/channel via your link.\n\n"
             "✍️ **Send the group invite link or username below:**"
         )
         buttons = [[utils.styled_button("🔙 Cancel", "all_slots_vc_menu", style="primary")]]
@@ -2630,19 +2628,25 @@ def register_handlers(client):
                 return
                 
             sessions = database.get_sessions(user_id)
-            running_phones = [s["phone"] for s in sessions if userbot_manager.is_bot_running(s["phone"])]
-            if not running_phones:
-                await event.reply("❌ No userbots are currently running. Please start your userbots first.")
+            if not sessions:
+                await event.reply("❌ No userbot slots found.")
                 return
                 
-            progress_msg = await event.reply(f"⏳ **All {len(running_phones)} userbots joining group concurrently...**")
+            progress_msg = await event.reply(f"⏳ **All {len(sessions)} userbots joining group...**")
             
-            async def _join_grp_concurrent(phone_num):
-                bot_obj = userbot_manager._running_bots[phone_num]
-                success = await join_channel_single(bot_obj.client, link)
-                return phone_num, success
+            async def _join_grp_concurrent(s):
+                phone_num = s["phone"]
+                # Auto-start if stopped
+                if not userbot_manager.is_bot_running(phone_num):
+                    await userbot_manager.start_userbot(phone_num)
+                    
+                bot_obj = userbot_manager._running_bots.get(phone_num)
+                if bot_obj:
+                    success = await join_channel_single(bot_obj.client, link)
+                    return phone_num, success
+                return phone_num, False
                 
-            results = await asyncio.gather(*[_join_grp_concurrent(p) for p in running_phones], return_exceptions=True)
+            results = await asyncio.gather(*[_join_grp_concurrent(s) for s in sessions], return_exceptions=True)
             await progress_msg.delete()
             
             success_count = 0
@@ -2650,7 +2654,7 @@ def register_handlers(client):
                 if not isinstance(res, Exception) and res[1]:
                     success_count += 1
                     
-            flash = f"🔗 **Group Join Results**:\nJoined: {success_count}/{len(running_phones)} userbots successfully!"
+            flash = f"🔗 **Group Join Results**:\nJoined: {success_count}/{len(sessions)} userbots successfully!"
             await show_all_slots_dashboard(event, user_id, flash_message=flash)
             return
 

@@ -61,6 +61,9 @@ async def show_admin_panel(event, user_id: int):
             utils.styled_button("👤 User Manager", "admin_manage_users", style="primary")
         ],
         [
+            utils.styled_button("👑 Control All UserBots (Owner)", "admin_owner_all_bots", style="success")
+        ],
+        [
             utils.styled_button("📊 Set Commission", "admin_set_comm", style="primary"),
             utils.styled_button("📢 Broadcast", "admin_broadcast", style="primary"),
             utils.styled_button(maint_text, "admin_toggle_maint", style="primary")
@@ -91,6 +94,32 @@ def register_handlers(client):
     @client.on(events.CallbackQuery(pattern="^menu_admin$"))
     async def admin_menu_callback(event):
         await show_admin_panel(event, event.sender_id)
+
+    @client.on(events.CallbackQuery(pattern="^admin_join_all_sessions$"))
+    async def admin_join_all_sessions_callback(event):
+        user_id = event.sender_id
+        if not check_admin(user_id):
+            return
+        _admin_action_states[user_id] = "WAITING_FOR_JOIN_ALL_SESSIONS"
+        prompt_text = (
+            "👥 **System Join ALL Userbots to Group**\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            "> Send the **Group invite link** or **Username** below.\n\n"
+            "⚠️ **ALL userbot sessions in the database (whether ON or OFF)** will auto-start and join this group!"
+        )
+        buttons = [[utils.styled_button("🔙 Cancel", "menu_admin", style="danger")]]
+        try:
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern="^admin_owner_all_bots$"))
+    async def admin_owner_all_bots_callback(event):
+        user_id = event.sender_id
+        if not check_admin(user_id):
+            return
+        from handlers.my_bots import show_all_slots_dashboard
+        await show_all_slots_dashboard(event, user_id, flash_message="👑 **Owner Panel**: Controlling ALL userbots in system!")
 
     @client.on(events.CallbackQuery(pattern="^cancel_admin_plan$"))
     async def cancel_admin_plan_callback(event):
@@ -520,36 +549,43 @@ def register_handlers(client):
                     global_settings["userbot_auto_join_links"] = [x.strip() for x in val_str.split(",") if x.strip()]
                 success = True
                 
-            # 6.2.3 Join All Sessions collective task
+            # 6.2.3 Join All Sessions collective task (System-wide for ALL DB accounts, running or stopped)
             elif action == "WAITING_FOR_JOIN_ALL_SESSIONS":
                 link = val_str
-                await event.reply("⏳ **Processing collective join...** Please wait.")
+                all_sessions = database.get_sessions()
+                total = len(all_sessions)
+                if not total:
+                    await event.reply("❌ No userbot sessions found in database.")
+                    await show_admin_panel(event, user_id)
+                    return
+                    
+                progress_msg = await event.reply(f"⏳ **Starting & Joining target group on all {total} userbots in DB...**")
                 
                 from userbot import join_channel_single
-                from userbot_manager import _running_bots
+                import userbot_manager
                 
-                active_bots = list(_running_bots.values())
-                total = len(active_bots)
-                success_count = 0
-                fail_count = 0
+                async def _join_one_db_account(s):
+                    phone_num = s["phone"]
+                    if not userbot_manager.is_bot_running(phone_num):
+                        await userbot_manager.start_userbot(phone_num)
+                    bot_obj = userbot_manager._running_bots.get(phone_num)
+                    if bot_obj and bot_obj.client:
+                        return await join_channel_single(bot_obj.client, link)
+                    return False
+                    
+                results = await asyncio.gather(*[_join_one_db_account(s) for s in all_sessions], return_exceptions=True)
+                await progress_msg.delete()
                 
-                for bot in active_bots:
-                    if bot.is_running and bot.client:
-                        res = await join_channel_single(bot.client, link)
-                        if res:
-                            success_count += 1
-                        else:
-                            fail_count += 1
-                    else:
-                        fail_count += 1
+                success_count = sum(1 for r in results if not isinstance(r, Exception) and r)
+                fail_count = total - success_count
                 
                 report = (
-                    f"📊 **Join All Sessions Report**\n"
+                    f"📊 **System Join All Report**\n"
                     f"━━━━━━━━━━━━━━━━━━━━\n"
                     f"Target Link: {link}\n"
-                    f"Total Active Sessions: **{total}**\n"
+                    f"Total Accounts in DB: **{total}**\n"
                     f"✅ Successfully Joined: **{success_count}**\n"
-                    f"❌ Failed/Offline: **{fail_count}**"
+                    f"❌ Failed: **{fail_count}**"
                 )
                 await event.reply(report)
                 await show_admin_panel(event, user_id)
