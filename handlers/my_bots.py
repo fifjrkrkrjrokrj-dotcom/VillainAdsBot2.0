@@ -401,10 +401,12 @@ async def show_all_slots_dashboard(event, user_id: int, flash_message: Optional[
     
     any_spam_on = any(s.get("settings", {}).get("auto_spam", False) for s in sessions)
     any_welcome_on = any(s.get("settings", {}).get("auto_welcome", False) for s in sessions)
+    any_reply_on = any(s.get("settings", {}).get("auto_reply", False) for s in sessions)
     any_add_contact_on = any(s.get("settings", {}).get("auto_add_contact", False) for s in sessions)
     
     spam_state_display = "🟢 ON" if any_spam_on else "🔴 OFF"
     welcome_state_display = "🟢 ON" if any_welcome_on else "🔴 OFF"
+    reply_state_display = "🟢 ON" if any_reply_on else "🔴 OFF"
     add_contact_state_display = "🟢 ON" if any_add_contact_on else "🔴 OFF"
     
     text = ""
@@ -419,54 +421,69 @@ async def show_all_slots_dashboard(event, user_id: int, flash_message: Optional[
         f"• Running: **🟢 {running_bots}** | Stopped: **🔴 {stopped_bots}**\n"
         f"• Auto-Spam (All): **{spam_state_display}**\n"
         f"• Auto-Welcome (All): **{welcome_state_display}**\n"
+        f"• Tag Auto-Reply (All): **{reply_state_display}**\n"
         f"• Auto-Contact (All): **{add_contact_state_display}**\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"⚡ _Control all your UserBots simultaneously from this panel._"
     )
     
     buttons = [
-        # Row 0: Start All, Stop All, Restart All
+        # Row 0: Start All, Stop All
         [
             utils.styled_button("🟢 Start All", "all_slots_start", style="success"),
-            utils.styled_button("🔴 Stop All", "all_slots_stop", style="danger"),
-            utils.styled_button("🔄 Restart All", "all_slots_restart", style="primary")
+            utils.styled_button("🔴 Stop All", "all_slots_stop", style="danger")
         ],
-        # Row 1: Set All Broadcast, Set All Welcome, Set All Multi-Welcome
+        # Row 0.5: Restart All
         [
-            utils.styled_button("✉️ Set All Broadcast", "all_slots_set_broadcast", style="primary"),
+            utils.styled_button("🔄 Restart All UserBots", "all_slots_restart", style="primary")
+        ],
+        # Row 1: Set All Broadcast
+        [
+            utils.styled_button("✉️ Set All Broadcast Text", "all_slots_set_broadcast", style="primary")
+        ],
+        # Row 1.2: Set All Welcome & Multi-Welcome
+        [
             utils.styled_button("👋 Set All Welcome", "all_slots_set_welcome", style="primary"),
             utils.styled_button("👋 Set All Multi-Welcome", "all_slots_set_multi_welcome", style="primary")
         ],
-        # Row 1.5: Voice Chat (VC) Menu (All)
+        # Row 1.5: Set All Tag Auto-Reply
+        [
+            utils.styled_button("💬 Set All Tag Auto-Reply", "all_slots_set_auto_reply", style="primary")
+        ],
+        # Row 1.8: Voice Chat (VC) Menu (All)
         [
             utils.styled_button("🎙️ VC + GRP JOINING (All)", "all_slots_vc_menu", style="success")
         ],
-        # Row 2: Auto-Spam (All), Auto-Welcome (All), Auto-Contact (All)
+        # Row 2: Auto Feature Toggles (All)
         [
             utils.styled_button(f"🔄 Auto-Spam (All): {spam_state_display}", "all_slots_toggle_spam", style="primary"),
-            utils.styled_button(f"👋 Auto-Welcome (All): {welcome_state_display}", "all_slots_toggle_welcome", style="primary"),
+            utils.styled_button(f"👋 Auto-Welcome (All): {welcome_state_display}", "all_slots_toggle_welcome", style="primary")
+        ],
+        [
+            utils.styled_button(f"💬 Tag Auto-Reply (All): {reply_state_display}", "all_slots_toggle_reply", style="primary"),
             utils.styled_button(f"👥 Auto-Contact (All): {add_contact_state_display}", "all_slots_toggle_add_contact", style="primary")
         ],
         # Row 3: Clone Profile (All)
         [
-            utils.styled_button("👤 Clone Profile (All)", "all_slots_clone_profile", style="primary")
+            utils.styled_button("👤 Clone Profile (All)", "all_slots_clone_profile", style="primary"),
+            utils.styled_button("✏️ Change Name (All)", "all_slots_change_name", style="primary")
         ],
-        # Row 4: Help, How to Use
+        # Row 4: Timing & Help
+        [
+            utils.styled_button("⏱️ Set Timing & Delays (All)", "all_slots_set_interval", style="primary")
+        ],
         [
             utils.styled_button(utils.get_text("btn_help", lang), "all_slots_help", style="primary"),
             utils.styled_button(utils.get_text("btn_how_to_use", lang), "all_slots_how_to_use", style="primary")
         ],
-        # Row 5: Change Name (All), Set Interval (All)
+        # Row 5: Refresh Stats & Delete
         [
-            utils.styled_button("✏️ Change Name (All)", "all_slots_change_name", style="primary"),
-            utils.styled_button("⏱️ Set Interval (All)", "all_slots_set_interval", style="primary")
+            utils.styled_button("🔄 Refresh Stats (All)", "all_slots_refresh_stats", style="primary")
         ],
-        # Row 6: Refresh Stats (All), Delete All Bots
         [
-            utils.styled_button("🔄 Refresh Stats (All)", "all_slots_refresh_stats", style="primary"),
-            utils.styled_button("🗑️ Delete All Bots", "all_slots_delete", style="danger")
+            utils.styled_button("🗑️ Delete All UserBots", "all_slots_delete", style="danger")
         ],
-        # Row 7: Back to Bots
+        # Row 6: Back to Bots
         [
             utils.styled_button(utils.get_text("btn_back_to_bots", lang), "menu_my_bots", style="danger")
         ]
@@ -479,6 +496,37 @@ async def show_all_slots_dashboard(event, user_id: int, flash_message: Optional[
             await event.respond(text, buttons=buttons)
     except Exception:
         await event.respond(text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_toggle_reply$"))
+    async def all_slots_toggle_reply_callback(event):
+        user_id = event.sender_id
+        sessions = database.get_sessions(user_id)
+        if not sessions:
+            await event.answer("⚠️ No slots found.", alert=True)
+            return
+        any_reply_on = any(s.get("settings", {}).get("auto_reply", False) for s in sessions)
+        target_state = not any_reply_on
+        for s in sessions:
+            s.setdefault("settings", {})["auto_reply"] = target_state
+            database.save_session(s)
+            userbot_manager.reload_bot_settings(s["phone"])
+        word = "ENABLED" if target_state else "DISABLED"
+        await show_all_slots_dashboard(event, user_id, flash_message=f"💬 **Tag Auto-Reply {word} for all userbots!**")
+
+    @client.on(events.CallbackQuery(pattern="^all_slots_set_auto_reply$"))
+    async def all_slots_set_auto_reply_callback(event):
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        _bot_action_states[user_id] = {
+            "action": "WAITING_FOR_ALL_AUTO_REPLY_MSGS"
+        }
+        prompt_text = utils.get_text("prompt_set_auto_reply", lang)
+        buttons = [[utils.styled_button("🔙 Cancel", "menu_all_slots", style="primary")]]
+        try:
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text, buttons=buttons)
 
 
 def register_handlers(client):
@@ -2607,6 +2655,24 @@ def register_handlers(client):
                 return
             else:
                 await event.reply("❌ Message list cannot be empty. Separate messages with commas `,`.")
+                return
+
+        elif action == "WAITING_FOR_ALL_AUTO_REPLY_MSGS":
+            raw_text = event.text
+            msgs = [m.strip() for m in raw_text.split(",") if m.strip()]
+            if msgs:
+                sessions = database.get_sessions(user_id)
+                for s in sessions:
+                    s.setdefault("settings", {})["auto_reply_messages"] = msgs
+                    s["settings"]["auto_reply"] = True
+                    database.save_session(s)
+                    if userbot_manager.is_bot_running(s["phone"]):
+                        userbot_manager.reload_bot_settings(s["phone"])
+                flash = f"✅ **Tag Auto-Reply messages updated for all bots ({len(msgs)} msgs)!**"
+                await show_all_slots_dashboard(event, user_id, flash_message=flash)
+                return
+            else:
+                await event.reply(utils.get_text("auto_reply_invalid", lang))
                 return
  
         elif action == "WAITING_FOR_ALL_SONG":
