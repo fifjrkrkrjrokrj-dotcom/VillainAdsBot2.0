@@ -396,16 +396,16 @@ def parse_spintax(text: str) -> str:
 
 def make_message_unique(text: str) -> str:
     """
-    Appends a random sequence of zero-width space characters (completely invisible to users)
-    to ensure the message has a unique cryptographic hash, bypassing telegram duplicate message filters.
+    Strips harmful zero-width unicode control characters that trigger Telegram server-side spambot filters.
+    Returns clean text suitable for safe broadcasting.
     """
-    import random
     if not isinstance(text, str) or not text:
         return text
-    # Zero-width space (\u200b), Zero-width non-joiner (\u200c), Zero-width joiner (\u200d)
-    invisible_chars = ['\u200b', '\u200c', '\u200d']
-    suffix = "".join(random.choice(invisible_chars) for _ in range(random.randint(3, 8)))
-    return text + suffix
+    # Remove any zero-width characters (\u200b, \u200c, \u200d, \ufeff) that trigger Telegram anti-spam filters
+    for zw in ['\u200b', '\u200c', '\u200d', '\ufeff']:
+        text = text.replace(zw, '')
+    return text
+
 
 def get_device_profile(session_id: str) -> dict:
     """

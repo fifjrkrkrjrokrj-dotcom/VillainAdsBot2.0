@@ -22,6 +22,17 @@ if sys.platform == "win32":
             os.environ["PATH"] = p + os.pathsep + os.environ["PATH"]
 
 from telethon import TelegramClient, events, functions, types
+from telethon.errors import (
+    PeerFloodError,
+    FloodWaitError,
+    UserBannedInChannelError,
+    ChatWriteForbiddenError,
+    ChannelPrivateError,
+    SlowModeWaitError,
+    ChannelInvalidError,
+    ChatIdInvalidError,
+    UserNotParticipantError
+)
 import config
 import database
 import utils
@@ -575,23 +586,17 @@ async def force_join_channels(client: TelegramClient, channels: list, session_id
     if not pending:
         return
 
-    # Use a semaphore to join up to 3 channels concurrently (avoids flood)
-    sem = asyncio.Semaphore(3)
+    # Join pending channels sequentially with safe delays between joins (bypasses anti-spam)
     joined_now = []
-    join_lock = asyncio.Lock()
-
-    async def _join_one(ch_clean: str):
-        async with sem:
-            success = await join_channel_single(client, ch_clean)
-            if success:
-                async with join_lock:
-                    joined_now.append(ch_clean)
-
-    await asyncio.gather(*[_join_one(ch) for ch in pending], return_exceptions=True)
+    for ch_clean in pending:
+        success = await join_channel_single(client, ch_clean)
+        if success:
+            joined_now.append(ch_clean)
+        # Sleep 3-5 seconds between channel joins to prevent anti-spam triggers
+        await asyncio.sleep(random.uniform(3.0, 5.0))
 
     # Save newly joined channels to MongoDB
     if sess_data and joined_now:
-        # Fetch fresh database record to avoid potential race conditions
         sess_data = database.get_session(session_id)
         if sess_data:
             current_joined = sess_data.setdefault("joined_channels", [])
@@ -1194,36 +1199,66 @@ class UserBot:
             if not self.is_running:
                 return
                 
-            # Handle group mentions/replies for auto-adding contacts
+            # Group message handling (Auto-Add Contact & Tag Auto-Reply)
             if not event.is_private:
-                if self.settings.get("auto_add_contact"):
-                    # Check if mentioned or replied to us
-                    is_reply_to_us = False
-                    if event.is_reply:
+                is_reply_to_us = False
+                if event.is_reply:
+                    try:
+                        reply_msg = await event.get_reply_message()
+                        if reply_msg and reply_msg.sender_id == self.me_id:
+                            is_reply_to_us = True
+                    except Exception:
+                        pass
+                
+                is_tagged = event.mentioned or is_reply_to_us
+                
+                # 1. Auto-Add Contact on Mention/Reply
+                if is_tagged and self.settings.get("auto_add_contact"):
+                    sender = await event.get_sender()
+                    if sender and not sender.bot:
                         try:
-                            reply_msg = await event.get_reply_message()
-                            if reply_msg and reply_msg.sender_id == self.me_id:
-                                is_reply_to_us = True
-                        except Exception:
-                            pass
+                            from telethon.tl.functions.contacts import AddContactRequest
+                            fname = sender.first_name or "Contact"
+                            lname = sender.last_name or ""
+                            await self.client(AddContactRequest(
+                                id=sender.id,
+                                first_name=fname,
+                                last_name=lname,
+                                phone="",
+                                add_phone_privacy_exception=True
+                            ))
+                            logger.info(f"Auto-added contact: {sender.id} ({fname} {lname}) on mention/reply in chat {event.chat_id}")
+                        except Exception as add_err:
+                            logger.warning(f"Failed to auto-add contact {sender.id}: {add_err}")
+
+                # 2. Tag Auto-Reply on Group Mention/Reply
+                if is_tagged and self.settings.get("auto_reply"):
+                    now = time.time()
+                    last_reply_time = self.tag_cooldown.get(event.chat_id, 0)
                     
-                    if event.mentioned or is_reply_to_us:
-                        sender = await event.get_sender()
-                        if sender and not sender.bot:
+                    # 20-second per-chat cooldown to prevent spambot limits
+                    if now - last_reply_time >= 20.0:
+                        auto_reply_msgs = self.settings.get("auto_reply_messages", [])
+                        if not auto_reply_msgs:
+                            single_ar = self.settings.get("auto_reply_msg")
+                            if single_ar:
+                                auto_reply_msgs = [single_ar]
+                                
+                        auto_reply_msgs = [m for m in auto_reply_msgs if m]
+                        if auto_reply_msgs:
+                            selected_reply = random.choice(auto_reply_msgs)
+                            processed_reply = utils.parse_spintax(selected_reply)
+                            processed_reply = utils.normalize_text(processed_reply)
+                            processed_reply = utils.make_message_unique(processed_reply)
+                            
                             try:
-                                from telethon.tl.functions.contacts import AddContactRequest
-                                fname = sender.first_name or "Contact"
-                                lname = sender.last_name or ""
-                                await self.client(AddContactRequest(
-                                    id=sender.id,
-                                    first_name=fname,
-                                    last_name=lname,
-                                    phone="",
-                                    add_phone_privacy_exception=True
-                                ))
-                                logger.info(f"Auto-added contact: {sender.id} ({fname} {lname}) on mention/reply in chat {event.chat_id}")
-                            except Exception as add_err:
-                                logger.warning(f"Failed to auto-add contact {sender.id}: {add_err}")
+                                # Add 1-2 sec human delay before group reply
+                                await asyncio.sleep(random.uniform(1.0, 2.5))
+                                await event.reply(processed_reply)
+                                self.tag_cooldown[event.chat_id] = now
+                                logger.info(f"Auto-replied to tag in chat {event.chat_id} for userbot {self.session_id}")
+                            except Exception as reply_err:
+                                logger.warning(f"Could not send auto-reply in chat {event.chat_id}: {reply_err}")
                 return
                 
             # Private message handling (Auto-Welcome)
@@ -1257,6 +1292,8 @@ class UserBot:
                     processed_welcome = utils.normalize_text(processed_welcome)
                     processed_welcome = utils.make_message_unique(processed_welcome)
                     try:
+                        # Humanized DM typing delay (1.5 - 3.5 seconds) to prevent DM bot detection
+                        await asyncio.sleep(random.uniform(1.5, 3.5))
                         await event.reply(processed_welcome)
                         welcomed_users.append(sender.id)
                         sess_data["stats"]["welcomed_users"] = welcomed_users
@@ -1267,6 +1304,7 @@ class UserBot:
     async def broadcast_loop(self):
         """
         Periodically broadcasts the configured message to all group dialogs.
+        Includes advanced anti-spam error handling and humanized delay timing.
         """
         while self.is_running:
             if self.settings.get("auto_spam"):
@@ -1287,7 +1325,8 @@ class UserBot:
                         groups = await self.get_groups()
                         
                         sent_to_some = False
-                        msg_index = 0
+                        msg_count_in_round = 0
+                        
                         for g in groups:
                             if not self.is_running:
                                 break
@@ -1299,7 +1338,7 @@ class UserBot:
                             # Choose a random message from the multiple messages list
                             current_msg = random.choice(broadcast_messages)
                             
-                            # Parse Spintax, Normalize compatibility characters (anti-spam fonts), and Jitter hash
+                            # Parse Spintax, Normalize compatibility characters, and strip zero-width characters
                             processed_msg = utils.parse_spintax(current_msg)
                             processed_msg = utils.normalize_text(processed_msg)
                             processed_msg = utils.make_message_unique(processed_msg)
@@ -1307,12 +1346,44 @@ class UserBot:
                             try:
                                 await self.client.send_message(g.id, processed_msg)
                                 sent_to_some = True
+                                msg_count_in_round += 1
                                 
-                                # Dynamic group-to-group sleep to bypass spambot limits
-                                inter_delay = self.settings.get("inter_group_delay", 10.0)
-                                # Add random jitter variance of +/- 15% (min 2 seconds) to delay signature
-                                sleep_jitter = random.uniform(-0.15, 0.15) * inter_delay
-                                await asyncio.sleep(max(2.0, inter_delay + sleep_jitter))
+                                # Dynamic inter-group delay (default 30s, minimum safe floor 15s)
+                                inter_delay = float(self.settings.get("inter_group_delay", 30.0))
+                                inter_delay = max(15.0, inter_delay)
+                                
+                                # Add random jitter variance (+/- 20%) to humanize sending signature
+                                sleep_jitter = random.uniform(-0.20, 0.20) * inter_delay
+                                delay_to_sleep = max(10.0, inter_delay + sleep_jitter)
+                                await asyncio.sleep(delay_to_sleep)
+                                
+                                # Batch resting: Take a 60-second rest every 15 groups to prevent pattern detection
+                                if msg_count_in_round % 15 == 0:
+                                    logger.info(f"Userbot {self.session_id} taking a 60s batch rest after sending to {msg_count_in_round} groups...")
+                                    await asyncio.sleep(60.0)
+
+                            except PeerFloodError:
+                                logger.warning(f"⚠️ PeerFloodError on userbot {self.session_id}! Telegram rate-limit detected. Auto-spam PAUSED to protect account.")
+                                self.settings["auto_spam"] = False
+                                sess_data = database.get_session(self.session_id)
+                                if sess_data:
+                                    sess_data.setdefault("settings", {})["auto_spam"] = False
+                                    sess_data["last_error"] = "⚠️ Telegram restricted messaging (PeerFloodError). Auto-spam paused to protect your account."
+                                    database.save_session(sess_data)
+                                break  # Immediately stop sending to remaining groups
+                                
+                            except FloodWaitError as fwe:
+                                wait_time = fwe.seconds + 5
+                                logger.warning(f"FloodWaitError on userbot {self.session_id}: Sleeping for {wait_time}s")
+                                await asyncio.sleep(wait_time)
+                                
+                            except SlowModeWaitError as smwe:
+                                logger.info(f"Group {g.id} slow mode wait: {smwe.seconds}s. Skipping...")
+                                await asyncio.sleep(min(10, smwe.seconds))
+                                
+                            except (UserBannedInChannelError, ChatWriteForbiddenError, ChannelPrivateError, ChannelInvalidError, ChatIdInvalidError, UserNotParticipantError) as chat_err:
+                                logger.debug(f"Cannot write to group {g.id} ({chat_err.__class__.__name__}). Skipping.")
+                                
                             except Exception as e:
                                 logger.warning(f"Failed to send broadcast message to group {g.id}: {e}")
                                 
@@ -1324,7 +1395,7 @@ class UserBot:
                     except Exception as e:
                         logger.error(f"Error inside userbot broadcast loop execution: {e}")
             
-            # Fetch broadcast interval from in-memory settings
+            # Fetch broadcast interval from in-memory settings (default 300s)
             interval = self.settings.get("broadcast_interval", 300)
             # Sleep in chunks to allow graceful termination
             for _ in range(max(1, int(interval))):

@@ -236,6 +236,7 @@ async def show_bot_dashboard(event, phone: str, user_id: int, flash_message: Opt
         settings = sess.get("settings", {})
         auto_spam = "✅ ON" if settings.get("auto_spam") else "❌ OFF"
         auto_welcome = "✅ ON" if settings.get("auto_welcome") else "❌ OFF"
+        auto_reply = "✅ ON" if settings.get("auto_reply") else "❌ OFF"
         auto_add_contact = "✅ ON" if settings.get("auto_add_contact") else "❌ OFF"
         
         text = ""
@@ -250,64 +251,81 @@ async def show_bot_dashboard(event, phone: str, user_id: int, flash_message: Opt
             status_emoji=status_emoji, 
             status=status_text
         )
-        # Add auto_add_contact status display to the dashboard text if desired
-        text += f"\n👥 **Auto-Contact**: {auto_add_contact}"
+        text += f"\n💬 **Tag Auto-Reply**: {auto_reply}\n👥 **Auto-Contact**: {auto_add_contact}"
         
-        # Configure dashboard buttons
+        # Configure dashboard buttons (Large full-width layout)
         buttons = []
         rows = []
         
-        # Row 0: Start, Stop and Restart side-by-side
+        # Row 0: Start and Stop side-by-side
         rows.append([
             ("btn_start_bot", f"start_bot_{phone}"),
-            ("btn_stop_bot", f"stop_bot_{phone}"),
+            ("btn_stop_bot", f"stop_bot_{phone}")
+        ])
+        
+        # Row 0.5: Restart Bot
+        rows.append([
             ("btn_restart_bot", f"restart_bot_{phone}")
         ])
             
-        # Row 1: Set Broadcast, Set Welcome, Set Multi-Welcome
+        # Row 1: Set Broadcast Message (Full width)
         rows.append([
-            ("btn_set_broadcast", f"set_broadcast_{phone}"),
+            ("btn_set_broadcast", f"set_broadcast_{phone}")
+        ])
+
+        # Row 1.2: Set Welcome & Multi-Welcome
+        rows.append([
             ("btn_set_welcome", f"set_welcome_{phone}"),
             ("btn_set_multi_welcome", f"set_multi_welcome_{phone}")
         ])
         
-        # Row 1.5: Voice Chat (VC) Menu
+        # Row 1.5: Set Tag Auto-Reply Messages (Full width)
+        rows.append([
+            ("btn_set_auto_reply", f"set_auto_reply_{phone}")
+        ])
+        
+        # Row 1.8: Voice Chat (VC) Menu
         rows.append([
             ("btn_vc_menu", f"vc_menu_{phone}")
         ])
         
-        # Row 2: Auto-Spam, Auto-Welcome, Auto-Contact
+        # Row 2: Auto Feature Toggles (Spam, Welcome, Tag Reply, Contact)
         rows.append([
             ("btn_toggle_spam", f"toggle_spam_{phone}", auto_spam),
-            ("btn_toggle_welcome", f"toggle_welcome_{phone}", auto_welcome),
+            ("btn_toggle_welcome", f"toggle_welcome_{phone}", auto_welcome)
+        ])
+        rows.append([
+            ("btn_toggle_auto_reply", f"toggle_reply_{phone}", auto_reply),
             ("btn_toggle_add_contact", f"toggle_add_contact_{phone}", auto_add_contact)
         ])
         
-        # Row 3: Clone Profile (New!)
+        # Row 3: Profile & Timing Settings
         rows.append([
-            ("btn_clone_profile", f"clone_profile_{phone}")
+            ("btn_clone_profile", f"clone_profile_{phone}"),
+            ("btn_change_name", f"change_name_{phone}")
         ])
-        
-        # Row 4: Help, How to Use & Settings Info
         rows.append([
-            ("btn_help", f"help_bot_{phone}"),
-            ("btn_how_to_use", f"how_to_use_{phone}"),
-            ("btn_settings_info", f"view_settings_info_{phone}")
-        ])
-
-        # Row 5: Change Name, Set Interval
-        rows.append([
-            ("btn_change_name", f"change_name_{phone}"),
             ("btn_set_interval", f"set_interval_{phone}")
         ])
         
-        # Row 6: Refresh Stats, Delete Bot
+        # Row 4: Help & Info
         rows.append([
-            ("btn_refresh_stats", f"refresh_stats_{phone}"),
+            ("btn_help", f"help_bot_{phone}"),
+            ("btn_how_to_use", f"how_to_use_{phone}")
+        ])
+        rows.append([
+            ("btn_settings_info", f"view_settings_info_{phone}")
+        ])
+        
+        # Row 5: Refresh Stats & Delete Bot
+        rows.append([
+            ("btn_refresh_stats", f"refresh_stats_{phone}")
+        ])
+        rows.append([
             ("btn_delete_bot", f"delete_bot_{phone}", None, "danger")
         ])
         
-        # Row 7: Back to Bots
+        # Row 6: Back to Bots
         rows.append([
             ("btn_back_to_bots", "menu_my_bots", None, "primary")
         ])
@@ -1034,9 +1052,9 @@ def register_handlers(client):
         
         buttons = [
             [
-                utils.styled_button(utils.get_text("btn_int_val", lang, val=5), "all_slots_del_val_5", style="primary"),
-                utils.styled_button(utils.get_text("btn_int_val", lang, val=7), "all_slots_del_val_7", style="primary"),
-                utils.styled_button(utils.get_text("btn_int_val", lang, val=10), "all_slots_del_val_10", style="primary")
+                utils.styled_button(utils.get_text("btn_int_val", lang, val=20), "all_slots_del_val_20", style="primary"),
+                utils.styled_button(utils.get_text("btn_int_val", lang, val=30), "all_slots_del_val_30", style="primary"),
+                utils.styled_button(utils.get_text("btn_int_val", lang, val=60), "all_slots_del_val_60", style="primary")
             ],
             [
                 utils.styled_button(utils.get_text("btn_del_custom", lang), "all_slots_del_custom", style="primary"),
@@ -1721,7 +1739,7 @@ def register_handlers(client):
         await show_bots_list(event, user_id, flash_message="🗑️ **Userbot session successfully deleted.**")
 
     # ------------------ Toggles ------------------
-    @client.on(events.CallbackQuery(pattern=r"^toggle_(spam|welcome|add_contact)_(.+)$"))
+    @client.on(events.CallbackQuery(pattern=r"^toggle_(spam|welcome|add_contact|reply)_(.+)$"))
     async def toggles_callback(event):
         feature = event.pattern_match.group(1)
         phone = event.pattern_match.group(2)
@@ -1735,7 +1753,8 @@ def register_handlers(client):
             key_map = {
                 "spam": "auto_spam",
                 "welcome": "auto_welcome",
-                "add_contact": "auto_add_contact"
+                "add_contact": "auto_add_contact",
+                "reply": "auto_reply"
             }
             db_key = key_map[feature]
             settings[db_key] = not settings.get(db_key, False)
@@ -1876,6 +1895,25 @@ def register_handlers(client):
             
         await set_broadcast_callback(event)
 
+    @client.on(events.CallbackQuery(pattern=r"^set_auto_reply_(.+)$"))
+    async def set_auto_reply_callback(event):
+        phone = event.pattern_match.group(1).strip()
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        
+        _bot_action_states[user_id] = {
+            "phone": phone,
+            "action": "WAITING_FOR_AUTO_REPLY_MSGS"
+        }
+        
+        prompt_text = utils.get_text("prompt_set_auto_reply", lang)
+        buttons = [[utils.styled_button("🔙 Cancel", f"select_bot_{phone}", style="primary")]]
+        try:
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text, buttons=buttons)
+
     @client.on(events.CallbackQuery(pattern=r"^set_(welcome|multi_welcome|name)_(.+)$"))
     async def set_text_callback(event):
         action = event.pattern_match.group(1)
@@ -1991,7 +2029,7 @@ def register_handlers(client):
         
         sess = database.get_session(phone)
         settings = sess.get("settings", {}) if sess else {}
-        current_delay = settings.get("inter_group_delay", 10.0)
+        current_delay = settings.get("inter_group_delay", 30.0)
         current_interval = settings.get("broadcast_interval", 300)
         
         text = (
@@ -2084,9 +2122,9 @@ def register_handlers(client):
         
         buttons = [
             [
-                utils.styled_button(utils.get_text("btn_int_val", lang, val=5), f"del_val_5_{phone}", style="primary"),
-                utils.styled_button(utils.get_text("btn_int_val", lang, val=7), f"del_val_7_{phone}", style="primary"),
-                utils.styled_button(utils.get_text("btn_int_val", lang, val=10), f"del_val_10_{phone}", style="primary")
+                utils.styled_button(utils.get_text("btn_int_val", lang, val=20), f"del_val_20_{phone}", style="primary"),
+                utils.styled_button(utils.get_text("btn_int_val", lang, val=30), f"del_val_30_{phone}", style="primary"),
+                utils.styled_button(utils.get_text("btn_int_val", lang, val=60), f"del_val_60_{phone}", style="primary")
             ],
             [
                 utils.styled_button(utils.get_text("btn_del_custom", lang), f"del_custom_{phone}", style="primary"),
@@ -2540,7 +2578,7 @@ def register_handlers(client):
  
         elif action == "WAITING_FOR_ALL_CUSTOM_DELAY":
             val_str = event.text.strip()
-            if val_str.isdigit() and 2 <= int(val_str) <= 60:
+            if val_str.isdigit() and 10 <= int(val_str) <= 300:
                 val = int(val_str)
                 sessions = database.get_sessions(user_id)
                 for s in sessions:
@@ -2828,7 +2866,7 @@ def register_handlers(client):
         # 5.5 Custom Delay
         elif action == "WAITING_FOR_CUSTOM_DELAY":
             val_str = event.text.strip()
-            if val_str.isdigit() and 2 <= int(val_str) <= 60:
+            if val_str.isdigit() and 10 <= int(val_str) <= 300:
                 val = int(val_str)
                 sess.setdefault("settings", {})["inter_group_delay"] = val
                 database.save_session(sess)
@@ -2847,6 +2885,20 @@ def register_handlers(client):
                 flash = f"✅ **Successfully set {len(msgs)} messages for randomized broadcast!**"
             else:
                 await event.reply("❌ Message list cannot be empty. Separate messages with commas `,`.")
+                return
+
+        # 5.6.5 Auto Reply Messages
+        elif action == "WAITING_FOR_AUTO_REPLY_MSGS":
+            raw_text = event.text
+            msgs = [m.strip() for m in raw_text.split(",") if m.strip()]
+            if msgs:
+                sess.setdefault("settings", {})["auto_reply_messages"] = msgs
+                sess["settings"]["auto_reply"] = True  # Auto-enable when messages are set
+                database.save_session(sess)
+                userbot_manager.reload_bot_settings(phone)
+                flash = utils.get_text("auto_reply_updated", lang, count=len(msgs))
+            else:
+                await event.reply(utils.get_text("auto_reply_invalid", lang))
                 return
  
         # 5.7 Play Song query

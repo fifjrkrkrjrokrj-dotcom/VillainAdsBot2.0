@@ -110,10 +110,17 @@ TRANSLATIONS = {
         
         # Inter-group delay
         "btn_set_inter_delay": "⏱️ Set Inter-Group Delay",
-        "inter_delay_title": "⏱️ **Set Inter-Group Delay**\n\nSelect the delay between sending messages to different groups:\n⚠️ Higher delay (e.g., 5-10s) decreases the risk of Spambot limits!",
-        "prompt_custom_inter_delay": "⏱️ Enter custom inter-group delay in seconds (minimum 2s, maximum 60s):",
+        "inter_delay_title": "⏱️ **Set Inter-Group Delay**\n\nSelect the delay between sending messages to different groups:\n⚠️ Recommended safe delay (25-60s) prevents Telegram Spambot account limits!",
+        "prompt_custom_inter_delay": "⏱️ Enter custom inter-group delay in seconds (minimum 10s, maximum 300s):",
         "inter_delay_updated": "✅ Inter-Group Delay updated to **{val}s**!",
-        "inter_delay_invalid": "❌ Invalid delay. Please input a number between 2 and 60.",
+        "inter_delay_invalid": "❌ Invalid delay. Please input a number between 10 and 300.",
+        
+        # Auto-Reply
+        "btn_toggle_auto_reply": "💬 Tag Auto-Reply: {state}",
+        "btn_set_auto_reply": "⚙️ Set Auto-Reply Messages",
+        "prompt_set_auto_reply": "💬 **Set Group Tag Auto-Reply Messages**\n\nEnter messages separated by commas (`msg1, msg2, msg3`):\n__Example__: `Hello, How can I help?, Check out my profile!`",
+        "auto_reply_updated": "✅ Auto-Reply messages updated (**{count}** messages)!",
+        "auto_reply_invalid": "❌ Invalid messages format. Please send non-empty comma-separated messages.",
         
         # Stats
         "stats_refreshed": "✅ Stats refreshed! Groups: {groups} | Users: {users}",
@@ -297,10 +304,17 @@ TRANSLATIONS = {
         
         # Inter-group delay
         "btn_set_inter_delay": "⏱️ ग्रुप्स के बीच विलंब सेट करें",
-        "inter_delay_title": "⏱️ **ग्रुप्स के बीच विलंब सेट करें**\n\nएक ग्रुप से दूसरे ग्रुप में मैसेज भेजने के बीच का विलंब चुनें:\n⚠️ अधिक विलंब (जैसे 5-10s) स्पैमबॉट लिमिट के खतरे को कम करता है!",
-        "prompt_custom_inter_delay": "⏱️ सेकंड में कस्टम विलंब दर्ज करें (न्यूनतम 2s, अधिकतम 60s):",
+        "inter_delay_title": "⏱️ **ग्रुप्स के बीच विलंब सेट करें**\n\nएक ग्रुप से दूसरे ग्रुप में मैसेज भेजने के बीच का विलंब चुनें:\n⚠️ सुरक्षित विलंब (जैसे 25-60s) स्पैमबॉट लिमिट के खतरे को रोकता है!",
+        "prompt_custom_inter_delay": "⏱️ सेकंड में कस्टम विलंब दर्ज करें (न्यूनतम 10s, अधिकतम 300s):",
         "inter_delay_updated": "✅ ग्रुप्स के बीच का विलंब **{val}s** पर अपडेट किया गया!",
-        "inter_delay_invalid": "❌ अमान्य विलंब। कृपया 2 से 60 के बीच की संख्या दर्ज करें।",
+        "inter_delay_invalid": "❌ अमान्य विलंब। कृपया 10 से 300 के बीच की संख्या दर्ज करें।",
+        
+        # Auto-Reply
+        "btn_toggle_auto_reply": "💬 टैग ऑटो-रिप्लाई: {state}",
+        "btn_set_auto_reply": "⚙️ ऑटो-रिप्लाई मैसेज सेट करें",
+        "prompt_set_auto_reply": "💬 **ग्रुप टैग ऑटो-रिप्लाई मैसेज सेट करें**\n\nकॉमा से अलग करके मैसेज दर्ज करें (`msg1, msg2, msg3`):\n__उदाहरण__: `नमस्ते, मैं आपकी कैसे मदद कर सकता हूँ?, मेरी प्रोफाइल देखें!`",
+        "auto_reply_updated": "✅ ऑटो-रिप्लाई मैसेज अपडेट किए गए (**{count}** मैसेज)!",
+        "auto_reply_invalid": "❌ अमान्य मैसेज प्रारूप। कृपया कॉमा से अलग किए गए मैसेज भेजें।",
         
         # Stats
         "stats_refreshed": "✅ आँकड़े ताज़ा हुए! समूह: {groups} | उपयोगकर्ता: {users}",
