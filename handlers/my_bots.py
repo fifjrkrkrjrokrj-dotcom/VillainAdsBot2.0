@@ -1943,8 +1943,168 @@ def register_handlers(client):
             
         await set_broadcast_callback(event)
 
+    # ------------------ DM Welcome Message Sub-Menu ------------------
+    @client.on(events.CallbackQuery(pattern=r"^set_welcome_(.+)$"))
+    async def set_welcome_callback(event):
+        phone = event.pattern_match.group(1).strip()
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        
+        sess = database.get_session(phone)
+        settings = sess.get("settings", {}) if sess else {}
+        mode = settings.get("welcome_mode", "single")
+        single_msg = settings.get("welcome_msg")
+        multi_msgs = settings.get("welcome_messages", [])
+        
+        mode_display = "📚 Multiple (Rotational)" if mode == "multiple" else "👋 Single (Normal)"
+        single_status = "✅ Set" if single_msg else "❌ Empty"
+        multiple_status = f"✅ Set ({len(multi_msgs)} msgs)" if multi_msgs else "❌ Empty"
+        
+        text = (
+            f"👋 **DM Welcome Message Settings**\n"
+            f"Configure DM welcome responses for Userbot `{phone}`:\n\n"
+            f"• **Current Mode**: **{mode_display}**\n"
+            f"• **Single Welcome**: {single_status}\n"
+            f"• **Multiple Welcomes**: {multiple_status}\n\n"
+            f"__How to set multiple welcomes__: Click 'Set Multiple Welcomes' and send messages separated by commas `,`.\n"
+            f"Example: `Hello welcome!, Hey thanks for messaging!, Hi there!`"
+        )
+        
+        buttons = [
+            [
+                utils.styled_button("👋 Set Single Welcome", f"set_single_welcome_{phone}", style="primary"),
+                utils.styled_button("📚 Set Multiple Welcomes", f"set_multi_welcome_{phone}", style="primary")
+            ],
+            [
+                utils.styled_button(f"🔄 Mode: {mode.upper()}", f"toggle_welcome_mode_{phone}", style="primary")
+            ],
+            [
+                utils.styled_button("🔙 Back to Dashboard", f"select_bot_{phone}", style="danger")
+            ]
+        ]
+        try:
+            await event.edit(text, buttons=buttons)
+        except Exception:
+            await event.respond(text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern=r"^set_single_welcome_(.+)$"))
+    async def set_single_welcome_callback(event):
+        phone = event.pattern_match.group(1).strip()
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        
+        _bot_action_states[user_id] = {
+            "phone": phone,
+            "action": "WAITING_FOR_WELCOME"
+        }
+        prompt_text = utils.get_text("prompt_welcome", lang)
+        buttons = [[utils.styled_button("🔙 Cancel", f"set_welcome_{phone}", style="primary")]]
+        try:
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern=r"^set_multi_welcome_(.+)$"))
+    async def set_multi_welcome_callback(event):
+        phone = event.pattern_match.group(1).strip()
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        
+        _bot_action_states[user_id] = {
+            "phone": phone,
+            "action": "WAITING_FOR_MULTI_WELCOME"
+        }
+        prompt_text = utils.get_text("prompt_multi_welcome", lang)
+        buttons = [[utils.styled_button("🔙 Cancel", f"set_welcome_{phone}", style="primary")]]
+        try:
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern=r"^toggle_welcome_mode_(.+)$"))
+    async def toggle_welcome_mode_callback(event):
+        phone = event.pattern_match.group(1).strip()
+        user_id = event.sender_id
+        
+        sess = database.get_session(phone)
+        if sess and str(sess.get("user_id")) == str(user_id):
+            settings = sess.setdefault("settings", {})
+            current_mode = settings.get("welcome_mode", "single")
+            new_mode = "multiple" if current_mode == "single" else "single"
+            settings["welcome_mode"] = new_mode
+            database.save_session(sess)
+            userbot_manager.reload_bot_settings(phone)
+            
+        await set_welcome_callback(event)
+
+    # ------------------ Tag Auto-Reply Sub-Menu ------------------
     @client.on(events.CallbackQuery(pattern=r"^set_auto_reply_(.+)$"))
     async def set_auto_reply_callback(event):
+        phone = event.pattern_match.group(1).strip()
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        
+        sess = database.get_session(phone)
+        settings = sess.get("settings", {}) if sess else {}
+        mode = settings.get("auto_reply_mode", "single")
+        single_msg = settings.get("auto_reply_msg")
+        multi_msgs = settings.get("auto_reply_messages", [])
+        
+        mode_display = "📚 Multiple (Rotational)" if mode == "multiple" else "💬 Single (Normal)"
+        single_status = "✅ Set" if single_msg else "❌ Empty"
+        multiple_status = f"✅ Set ({len(multi_msgs)} msgs)" if multi_msgs else "❌ Empty"
+        
+        text = (
+            f"💬 **Group Tag Auto-Reply Settings**\n"
+            f"Configure group tag/mention responses for Userbot `{phone}`:\n\n"
+            f"• **Current Mode**: **{mode_display}**\n"
+            f"• **Single Reply**: {single_status}\n"
+            f"• **Multiple Replies**: {multiple_status}\n\n"
+            f"__How to set multiple replies__: Click 'Set Multiple Replies' and send messages separated by commas `,`.\n"
+            f"Example: `Hello!, How can I help?, Check out my channel!`"
+        )
+        
+        buttons = [
+            [
+                utils.styled_button("💬 Set Single Reply", f"set_single_reply_{phone}", style="primary"),
+                utils.styled_button("📚 Set Multiple Replies", f"set_multi_reply_{phone}", style="primary")
+            ],
+            [
+                utils.styled_button(f"🔄 Mode: {mode.upper()}", f"toggle_reply_mode_{phone}", style="primary")
+            ],
+            [
+                utils.styled_button("🔙 Back to Dashboard", f"select_bot_{phone}", style="danger")
+            ]
+        ]
+        try:
+            await event.edit(text, buttons=buttons)
+        except Exception:
+            await event.respond(text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern=r"^set_single_reply_(.+)$"))
+    async def set_single_reply_callback(event):
+        phone = event.pattern_match.group(1).strip()
+        user_id = event.sender_id
+        user = database.get_user(user_id)
+        lang = user.get("language", "en") if user else "en"
+        
+        _bot_action_states[user_id] = {
+            "phone": phone,
+            "action": "WAITING_FOR_AUTO_REPLY_SINGLE"
+        }
+        prompt_text = "💬 **Send your single group tag auto-reply message below:**"
+        buttons = [[utils.styled_button("🔙 Cancel", f"set_auto_reply_{phone}", style="primary")]]
+        try:
+            await event.edit(prompt_text, buttons=buttons)
+        except Exception:
+            await event.respond(prompt_text, buttons=buttons)
+
+    @client.on(events.CallbackQuery(pattern=r"^set_multi_reply_(.+)$"))
+    async def set_multi_reply_callback(event):
         phone = event.pattern_match.group(1).strip()
         user_id = event.sender_id
         user = database.get_user(user_id)
@@ -1954,37 +2114,43 @@ def register_handlers(client):
             "phone": phone,
             "action": "WAITING_FOR_AUTO_REPLY_MSGS"
         }
-        
         prompt_text = utils.get_text("prompt_set_auto_reply", lang)
-        buttons = [[utils.styled_button("🔙 Cancel", f"select_bot_{phone}", style="primary")]]
+        buttons = [[utils.styled_button("🔙 Cancel", f"set_auto_reply_{phone}", style="primary")]]
         try:
             await event.edit(prompt_text, buttons=buttons)
         except Exception:
             await event.respond(prompt_text, buttons=buttons)
 
-    @client.on(events.CallbackQuery(pattern=r"^set_(welcome|multi_welcome|name)_(.+)$"))
-    async def set_text_callback(event):
-        action = event.pattern_match.group(1)
-        phone = event.pattern_match.group(2)
+    @client.on(events.CallbackQuery(pattern=r"^toggle_reply_mode_(.+)$"))
+    async def toggle_reply_mode_callback(event):
+        phone = event.pattern_match.group(1).strip()
         user_id = event.sender_id
         
+        sess = database.get_session(phone)
+        if sess and str(sess.get("user_id")) == str(user_id):
+            settings = sess.setdefault("settings", {})
+            current_mode = settings.get("auto_reply_mode", "single")
+            new_mode = "multiple" if current_mode == "single" else "single"
+            settings["auto_reply_mode"] = new_mode
+            database.save_session(sess)
+            userbot_manager.reload_bot_settings(phone)
+            
+        await set_auto_reply_callback(event)
+
+    @client.on(events.CallbackQuery(pattern=r"^change_name_(.+)$"))
+    async def change_name_callback(event):
+        phone = event.pattern_match.group(1).strip()
+        user_id = event.sender_id
         user = database.get_user(user_id)
         lang = user.get("language", "en") if user else "en"
         
         _bot_action_states[user_id] = {
             "phone": phone,
-            "action": f"WAITING_FOR_{action.upper()}"
+            "action": "WAITING_FOR_NAME"
         }
-        
-        prompt_map = {
-            "welcome": "prompt_welcome",
-            "multi_welcome": "prompt_multi_welcome",
-            "name": "prompt_name"
-        }
-        
-        prompt_text = utils.get_text(prompt_map[action], lang)
+        prompt_text = utils.get_text("prompt_name", lang)
+        buttons = [[utils.styled_button("🔙 Cancel", f"select_bot_{phone}", style="primary")]]
         try:
-            buttons = [[utils.styled_button("🔙 Cancel", f"select_bot_{phone}", style="primary")]]
             await event.edit(prompt_text, buttons=buttons)
         except Exception:
             await event.respond(prompt_text, buttons=buttons)
@@ -2951,6 +3117,19 @@ def register_handlers(client):
                 flash = f"✅ **Successfully set {len(msgs)} messages for randomized broadcast!**"
             else:
                 await event.reply("❌ Message list cannot be empty. Separate messages with commas `,`.")
+                return
+
+        # 5.6.4 Single Auto Reply Message
+        elif action == "WAITING_FOR_AUTO_REPLY_SINGLE":
+            msg_text = event.text.strip()
+            if msg_text:
+                sess.setdefault("settings", {})["auto_reply_msg"] = msg_text
+                sess["settings"]["auto_reply"] = True
+                database.save_session(sess)
+                userbot_manager.reload_bot_settings(phone)
+                flash = "💬 **Single Tag Auto-Reply message updated!**"
+            else:
+                await event.reply("❌ Message cannot be empty.")
                 return
 
         # 5.6.5 Auto Reply Messages

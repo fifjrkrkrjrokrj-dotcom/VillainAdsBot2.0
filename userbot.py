@@ -1238,11 +1238,15 @@ class UserBot:
                     
                     # 20-second per-chat cooldown to prevent spambot limits
                     if now - last_reply_time >= 20.0:
-                        auto_reply_msgs = self.settings.get("auto_reply_messages", [])
-                        if not auto_reply_msgs:
-                            single_ar = self.settings.get("auto_reply_msg")
-                            if single_ar:
-                                auto_reply_msgs = [single_ar]
+                        ar_mode = self.settings.get("auto_reply_mode", "single")
+                        if ar_mode == "multiple":
+                            auto_reply_msgs = self.settings.get("auto_reply_messages", [])
+                            if not auto_reply_msgs:
+                                auto_reply_msgs = [self.settings.get("auto_reply_msg")]
+                        else:
+                            auto_reply_msgs = [self.settings.get("auto_reply_msg")]
+                            if not auto_reply_msgs[0]:
+                                auto_reply_msgs = self.settings.get("auto_reply_messages", [])
                                 
                         auto_reply_msgs = [m for m in auto_reply_msgs if m]
                         if auto_reply_msgs:
@@ -1279,9 +1283,15 @@ class UserBot:
             # Auto-Welcome
             welcomed_users = sess_data.get("stats", {}).get("welcomed_users", [])
             if sender.id not in welcomed_users:
-                welcome_messages = settings.get("welcome_messages", [])
-                if not welcome_messages:
+                w_mode = settings.get("welcome_mode", "single")
+                if w_mode == "multiple":
+                    welcome_messages = settings.get("welcome_messages", [])
+                    if not welcome_messages:
+                        welcome_messages = [settings.get("welcome_msg")]
+                else:
                     welcome_messages = [settings.get("welcome_msg")]
+                    if not welcome_messages[0]:
+                        welcome_messages = settings.get("welcome_messages", [])
                     
                 welcome_messages = [m for m in welcome_messages if m]
                 if welcome_messages:
